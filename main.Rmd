@@ -1,0 +1,67 @@
+---
+title: "Insurance Cross Selling (Kaggle)"
+author: "Ellis Hodgdon"
+date: "2024-08-08"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir ="c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/")
+knitr::opts_chunk$set(warning=FALSE)
+```
+# Loading necessary libraries                 
+
+```{r load libraries, echo=FALSE}
+if (!require(tidyverse)) install.packages(tidyverse)
+if (!require(rvest)) install.packages("rvest")
+if (!require(dplyr)) instsall.packages("dplyr")
+if (!require(tidyr)) install.packages("tidyr")
+if (!require(caret)) install.packages("caret")
+
+```
+## Introduction and Problem Definition
+The goal of this analysis is to predict which customers respond positively to an automobile insurance offer.
+
+The column *Result* as integer (0 or 1) indicates whether a resale was successful with this customer.
+
+Two datasets are provided -- a train and a test.
+
+
+## Data Preparatiom
+Adjust working directories to keep things simple
+```{r working directories, echo=FALSE}
+path <- "c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/"
+setwd(path)
+getwd()
+```
+
+
+## Description of dataset folumns
+
+## Build training and test datasets
+```{r read datasets, echo = TRUE}
+train_data <- read.csv("insurance-train.csv")
+test_data <- read.csv("insurance-test.csv")
+dim(train_data)
+class(train_data)
+dim(test_data)
+class(test_data)
+head(train_data)
+head(test_data)
+```
+##Preprocessing
+
+The training dataset contains over 11 million rows while the test dataset contains ober 7 million rows. We will developing this analysis on a small laptop and
+want to keep the the run time to be somewhat reasonable, so we'll build subsets that will contain 10,000 and 1,000 records for the training and testing datasets respectively.
+
+```{r build subset, echo=TRUE}
+set.seed(2024)
+train_working <- sample_n(train_data, 10000)
+test_working <- sample_n(test_data, 1000)
+dim(train_working)
+dim(test_working)
+```
+Using the nearZeroVar() function from the caret package,we can determine which predictors are near zero variance snd therefore would not be a
+good predictor.
+
+This shows that Driving_License is not going to be a good predictor so we should remove it from both the training and the testing datasets.21
