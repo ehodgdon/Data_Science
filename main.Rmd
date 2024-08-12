@@ -5,29 +5,27 @@ date: "2024-08-08"
 output: html_document
 ---
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_knit$set(root.dir ="c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/")
 knitr::opts_chunk$set(warning=FALSE)
 ```
-# Loading necessary libraries                 
+### Introduction, Setup, and Loading necessary libraries                 
 
 ```{r load libraries, echo=FALSE}
-if (!require(tidyverse)) install.packages(tidyverse)
-if (!require(rvest)) install.packages("rvest")
-if (!require(dplyr)) instsall.packages("dplyr")
-if (!require(tidyr)) install.packages("tidyr")
-if (!require(caret)) install.packages("caret")
+if (!require(tidyverse)) install.packages(tidyverse, verbose=FALSE)
+if (!require(rvest)) install.packages("rvest", verbose=FALSE)
+if (!require(dplyr)) instsall.packages("dplyr", verbose=FALSE)
+if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
+if (!require(caret)) install.packages("caret", verbose=FALSE)
 
 ```
-## Introduction and Problem Definition
+## Problem Definition
 The goal of this analysis is to predict which customers respond positively to an automobile insurance offer.
 
 The column *Result* as integer (0 or 1) indicates whether a resale was successful with this customer.
 
-Two datasets are provided -- a train and a test.
 
-
-## Data Preparatiom
+### Data Preparatiom
 Adjust working directories to keep things simple
 ```{r working directories, echo=FALSE}
 path <- "c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/"
@@ -36,32 +34,78 @@ getwd()
 ```
 
 
-## Description of dataset folumns
-
-## Build training and test datasets
+### Input the training dataset
+Kaggle provides two datasets -- training and test -- but the test dataset is only used to judge the developed algorithm. It is missing the *Response* column.
+We will do some work on the training dataset and then split it into two smaller datasets that we can reasonably handle.
 ```{r read datasets, echo = TRUE}
 train_data <- read.csv("insurance-train.csv")
-test_data <- read.csv("insurance-test.csv")
-dim(train_data)
-class(train_data)
-dim(test_data)
-class(test_data)
 head(train_data)
-head(test_data)
 ```
-##Preprocessing
+## Description of dataset columns
+```{r, display column names, echo=FALSE}
 
-The training dataset contains over 11 million rows while the test dataset contains ober 7 million rows. We will developing this analysis on a small laptop and
-want to keep the the run time to be somewhat reasonable, so we'll build subsets that will contain 10,000 and 1,000 records for the training and testing datasets respectively.
+tbl <- matrix(c(1:36), ncol = 3, byrow= TRUE)
+rownames <- c("Identification", "Gender", "Age (in years)", "Driver's License Nbr", "Region Code", "Previously Insured", "Insured Vehicles Age", "Vehicle Damage",
+             "Annual Premium", "Policy Sales Channel", "Vintage", "Response")
+colnames <- c("Name", "Description", "Class")
 
-```{r build subset, echo=TRUE}
-set.seed(2024)
-train_working <- sample_n(train_data, 10000)
-test_working <- sample_n(test_data, 1000)
-dim(train_working)
-dim(test_working)
+col3 <- vector()
+for (col in 1:ncol(train_data)) {col3 <- c(col3, class(train_data[,col]))}
+colnames(tbl) <- colnames
+rownames(tbl) <- rownames
+tbl[,1] <- as.vector(colnames(train_data))
+tbl[,2] <- c("id", "Gender", "Age", "Driving_License", "Region_Code", "Previously_Insured", "Vehicle's_age", "Vehicle_damage", "Annual Premium", "Policy_Sales_Channel",
+          "Vintage", "Success")
+tbl[,3] <- col3
+knitr::kable(tbl, caption = "Column Names in Dataset", align="c")
 ```
-Using the nearZeroVar() function from the caret package,we can determine which predictors are near zero variance snd therefore would not be a
+
+## Preprocessing
+One might suspect that there would be no positive responses when there was no previous insurance applied. To determine if this is true we look at the number of positive responses when the column *Previously_insured* is 0.
+```{r previousl;y_insured}
+num <- sum(train_data$Previously_Insured == 0 & train_data$Response == TRUE)
+num
+```
+This shows that our suspicion is not valid and we need to consider *Previously_insured* as a feature.
+
+Check for any rows containing NAs
+```{r check for NAs, echo = FALSE}
+na_counts <- train_data %>% summarise_all(~ sum(is.na(.)))
+sum(na_counts)
+```
+This value of zero indicates there are no NAs in the entire dataset. Next, check of missing data
+
+Check for any rows containing blanks
+```{r check for nulls, echo = FALSE}
+na_nulls <- sum(is.null(train_data))
+sum(na_nulls)
+
+```
+Since this value is zero as well, the training dataset has no null or missing fields.
+
+Using the nearZeroVar() function from the caret package,we can determine which predictors are near zero variance and therefore would not be a
 good predictor.
 
-This shows that Driving_License is not going to be a good predictor so we should remove it from both the training and the testing datasets.21
+```{r apply nearZeroVar}nzv <- nearZeroVar(trains_data)
+train_data <- train_data[, -nzv]
+```
+
+This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the testing datasets.
+
+We now consider the *Response* column. What percentage of the reponses are positive, that is, how many cross-selling attempts were successful. We then ask the question if there are any vehicles that are not insured that have a positive response.
+
+```{r response mean}
+response_mean <- mean(train_data$Response)
+hist(c(1*response_mean, 1-1*response_mean), col=c('red','blue'), main="Response")
+uninsured_positives <- sum(train_data$response == 0)
+
+```
+The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will developing this analysis on a small laptop and
+want to keep the the run time to be somewhat reasonable, so we'll build subsets that will contain 10,000 and 1,000 records for the training and testing datasets respectively.
+
+```{r build subset, echo=FALSE}
+set.seed(2024)
+train_working <- sample_n(train_data, 10000)
+
+```
+
