@@ -12,7 +12,7 @@ knitr::opts_chunk$set(warning=FALSE)
 ### Introduction, Setup, and Loading necessary libraries                 
 
 ```{r load libraries, echo=FALSE}
-if (!require(tidyverse)) install.packages(tidyverse, verbose=FALSE)
+if (!require(tidyverse)) suppressMessages(install.packages(tidyverse, verbose=FALSE))
 if (!require(rvest)) install.packages("rvest", verbose=FALSE)
 if (!require(dplyr)) instsall.packages("dplyr", verbose=FALSE)
 if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
@@ -25,7 +25,7 @@ The goal of this analysis is to predict which customers respond positively to an
 The column *Result* as integer (0 or 1) indicates whether a resale was successful with this customer.
 
 
-### Data Preparatiom
+### Data Preparation
 Adjust working directories to keep things simple
 ```{r working directories, echo=FALSE}
 path <- "c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/"
@@ -86,7 +86,8 @@ Since this value is zero as well, the training dataset has no null or missing fi
 Using the nearZeroVar() function from the caret package,we can determine which predictors are near zero variance and therefore would not be a
 good predictor.
 
-```{r apply nearZeroVar}nzv <- nearZeroVar(trains_data)
+```{r apply nearZeroVar}
+nzv <- nearZeroVar(train_data)
 train_data <- train_data[, -nzv]
 ```
 
@@ -96,8 +97,12 @@ We now consider the *Response* column. What percentage of the reponses are posit
 
 ```{r response mean}
 response_mean <- mean(train_data$Response)
-hist(c(1*response_mean, 1-1*response_mean), col=c('red','blue'), main="Response")
-uninsured_positives <- sum(train_data$response == 0)
+plot_df <- data.frame(c("positive", "negative"), c(1-response_mean, response_mean))
+colnames(plot_df) <- c("response","percent")
+
+# hist(c(1*response_mean, 1-1*response_mean), col=c('red','blue'), main="Response")
+# uninsured_positives <- sum(train_data$response == 0)
+ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=response), show.legend=FALSE, stat="identity")
 
 ```
 The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will developing this analysis on a small laptop and
@@ -105,7 +110,81 @@ want to keep the the run time to be somewhat reasonable, so we'll build subsets 
 
 ```{r build subset, echo=FALSE}
 set.seed(2024)
-train_working <- sample_n(train_data, 10000)
+test_set <- sample_n(train_data, 5000)
+train_set <- sample_n(train_data, 50000)
+# test_index <- createDataPartition(train_data$id, times=1, p = 0.001, list = FALSE)
+# test_set <- train_data[test_index,]
+# train_set <- train_data[-test_index,]
+dim(test_set)
+dim(train_set)
+train_set_x <- train_set[,-train_set$Response]
+train_set_y <- as.factor(train_set$Response)
+dim(train_set_x)
+dim(train_set_y)
+
+start.time <- Sys.time()
+control <- trainControl(method = "cv", number = 10, p = .9)
+x <- train_set_x[, c(-11, -6, -5, -1)]
+train_knn1 <- train(x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,9,2))), trControl = control)
+end.time <- Sys.time()
+time.taken <- round(end.time - start.time)
+time.taken
+
+df_knn1 <- train_knn1$results
+
+max_accuracy <- which.max(df_knn1$Accuracy)
+max_k <- df_knn1$k[max_accuracy]
+
+a <- max_k - 2
+b <- max_k + 2
+if (a < 1) a <- 1
+
+range <- seq(a,b)
+range
+
+train_knn2 <- train(x, train_set_y, method="knn", tuneGrid = data.frame(k = range), trControl = control)
+
+df_knn2 <- train_knn2$results
+max_accuracy <- which.max(df_knn2$Accuracy)
+max_k <- df_knn2$k[max_accuracy]
+
+df_knn <- merge(df_knn1, df_knn2, by=c("Accuracy","k", "Kappa", "AccuracySD", "KappaSD"), all=TRUE)
+k_max <- which.max(df_knn$Accuracy)
+
+train_knn <- train(x, train_set_y, method="knn", tuneGrid = data.frame(k = k_max), trControl = control)
+
+fit_knn <- knn3(x, train_set_y, k=9)
+
+y_hat_knn <- predict(fit_knn, x, type="class")
+cm <- confusionMatrix(y_hat_knn, factor(train_set_y))
+cm
+cm$overall["Accuracy"]
+cm$byClass["Sensitivity"]
+cm$byClass["Specificity"]
 
 ```
 
+
+
+```
+
+
+We don't touch the *test_set* until we start testing the algorithms we build.
+
+'''
+
+ggplot(data=df) + geom_bar(mapping = aes(x=id, y=percent, fill=id), stat="identity")
+
+merge accuracy tables
+tbls <- merge(tb1, tbl2, by=c("k", "Accuracy", "Kappa"), all=TRUE)
+which.max(tbls$Accuracy)
+df <- as.data.frame(train_knn1[15])
+
+
+
+'''
+df <- data.frame(c(1,2,3,4,5,6,7,8,9), c("male","male","female", "male", "female", "male","female","male","female"))
+> x <- df
+> colnames(x) <- c("index", "gender")
+> x$gender <- ifelse(x$gender == "male",0, 1)
+> x
