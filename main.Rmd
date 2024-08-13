@@ -9,39 +9,92 @@ knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_knit$set(root.dir ="c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/")
 knitr::opts_chunk$set(warning=FALSE)
 ```
-### Introduction, Setup, and Loading necessary libraries                 
+### Introduction, setup, loading necessary libraries, and adjust working directories                 
 
-```{r load libraries, echo=FALSE}
-if (!require(tidyverse)) suppressMessages(install.packages(tidyverse, verbose=FALSE))
+```{r load libraries, echo=FALSE, message=FALSE, warning = FALSE}
+
+library(tidyverse, quietly = TRUE, warn.conflicts=FALSE)
+  
 if (!require(rvest)) install.packages("rvest", verbose=FALSE)
 if (!require(dplyr)) instsall.packages("dplyr", verbose=FALSE)
 if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
 if (!require(caret)) install.packages("caret", verbose=FALSE)
 
+path <- "c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/"
+setwd(path)
 ```
-## Problem Definition
-The goal of this analysis is to predict which customers respond positively to an automobile insurance offer.
+    The libraries that were installed (if needed) and loaded were:
+    
+    * tidyverse
+    * rvest
+    * dplyr
+    * tidyr
+    * caret
+
+```{r working directory}
+print(paste("The current working diretory is ", getwd()))
+```
+
+  
+### Problem Definition
+The goal of this analysis is to predict which customers respond positively to an automobile insurance offer based on multiple features such as gender, age, the age of the vehicle, if the vehicle had been damaged, etc. During the exploratory data analysis we will determine which features are not important and will not include these in our training for the algorithm.
 
 The column *Result* as integer (0 or 1) indicates whether a resale was successful with this customer.
 
 
-### Data Preparation
-Adjust working directories to keep things simple
-```{r working directories, echo=FALSE}
-path <- "c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/"
-setwd(path)
-getwd()
-```
-
-
-### Input the training dataset
+### Input the training dataset and data prep
 Kaggle provides two datasets -- training and test -- but the test dataset is only used to judge the developed algorithm. It is missing the *Response* column.
-We will do some work on the training dataset and then split it into two smaller datasets that we can reasonably handle.
-```{r read datasets, echo = TRUE}
+We will do some data cleaning on the training dataset but since it contains over 11 million records, we take a subset of the main dataset and divide that into into two smaller datasets that we can reasonably handle. We will work with a training dataset of 50,000 records and a testing dataset of 5000 records.
+```{r read datasets, echo = FALSE}
 train_data <- read.csv("insurance-train.csv")
-head(train_data)
+
+
+data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
+  # check for any rows containing NAs
+  na_counts <- train_data %>% summarise_all(~ sum(is.na(.)))
+  number_of_NAs <- sum(na_counts)
+  if (number_of_NAs > 0 ) {
+    df <- na.omit(df)
+    number_of_NAs
+  }
+   # A value of zero indicates there are no NAs in the entire dataset. Next, check of missing data
+
+   # Check for any rows containing blanks
+  na_nulls <- sum(is.null(train_data))
+  number_of_nulls <- sum(na_nulls)
+  if (number_of_nulls > 0) {
+    df[df == "NULL"] <- NA
+    df <- na.omit(df)
+    number_of_nulls
+  }
+
+  # Using the nearZeroVar() function from the caret package,we can determine which predictors are near zero variance and therefore would not be a
+  # good predictor.
+  ifelse (!nzv_arg,   nzv_list <<- nearZeroVar(train_data), nzv_list <- nzv_arg)    # <<- global assignment operator
+  if (length(nzv_list) > 0) {
+    df <- df[, -nzv_list]  # remove near zero variances
+    for (i in nzv_list) print(colnames(train_data)[i])
+  }    # end of if (length(nzv_list) ...
+  # This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the   # testing datasets.
+  
+  # convert the Gender column from "Male", "Female" to 0 and 1df
+  df$Gender <- ifelse(df$Gender == "Male", 0, 1)
+  
+  # convert the Vehicle_Damage column from "Yes" and "No" ti 1 and 0
+  df$Vehicle_Damage <- ifelse(df$Vehicle_Damage == "Yes", 1, 0)
+  
+  # convert the Vehicle_Age from a text to a numeric value
+  unique <- unique(train_data$Vehicle_Age)
+  for (age in unique) {df$Vehicle_Age[df$Vehicle_Age == age] <- which(unique == age)}
+  
+  #At this point all values in the data frame are numeric
+
+
+ return (df)
+}   # end of function
+
 ```
-## Description of dataset columns
+### Description of dataset columns
 ```{r, display column names, echo=FALSE}
 
 tbl <- matrix(c(1:36), ncol = 3, byrow= TRUE)
@@ -57,41 +110,36 @@ tbl[,1] <- as.vector(colnames(train_data))
 tbl[,2] <- c("id", "Gender", "Age", "Driving_License", "Region_Code", "Previously_Insured", "Vehicle's_age", "Vehicle_damage", "Annual Premium", "Policy_Sales_Channel",
           "Vintage", "Success")
 tbl[,3] <- col3
-knitr::kable(tbl, caption = "Column Names in Dataset", align="c")
+knitr::kable(tbl, caption = "Column Names in Dataset", align=rep('l', 5)) 
 ```
+
+## Data Preparation
+Data preparation and cleaning are done by a function so that it can easily be reused for different test and training data sets.
+
+    * The function provides the following operations
+        + removal of any NAs 
+        + removal of any rows that contain blanks 
+        + checks near zero variance and removes any columns that have a near zero variance 
+        + converts the Gender column to numeric 1 or 0 
+        + converts the Vehicle_Damage column to numeric 
+        + converts the vehicle_Age column to a numerical value of the unique values in the column 
+
+```{r data prep via function}
+train_data <- data_prep(train_data)
+```
+
 
 ## Preprocessing
 One might suspect that there would be no positive responses when there was no previous insurance applied. To determine if this is true we look at the number of positive responses when the column *Previously_insured* is 0.
+
 ```{r previousl;y_insured}
 num <- sum(train_data$Previously_Insured == 0 & train_data$Response == TRUE)
 num
 ```
 This shows that our suspicion is not valid and we need to consider *Previously_insured* as a feature.
 
-Check for any rows containing NAs
-```{r check for NAs, echo = FALSE}
-na_counts <- train_data %>% summarise_all(~ sum(is.na(.)))
-sum(na_counts)
-```
-This value of zero indicates there are no NAs in the entire dataset. Next, check of missing data
+We check the variances of the various columns and determine that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the testing datasets.
 
-Check for any rows containing blanks
-```{r check for nulls, echo = FALSE}
-na_nulls <- sum(is.null(train_data))
-sum(na_nulls)
-
-```
-Since this value is zero as well, the training dataset has no null or missing fields.
-
-Using the nearZeroVar() function from the caret package,we can determine which predictors are near zero variance and therefore would not be a
-good predictor.
-
-```{r apply nearZeroVar}
-nzv <- nearZeroVar(train_data)
-train_data <- train_data[, -nzv]
-```
-
-This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the testing datasets.
 
 We now consider the *Response* column. What percentage of the reponses are positive, that is, how many cross-selling attempts were successful. We then ask the question if there are any vehicles that are not insured that have a positive response.
 
@@ -105,27 +153,23 @@ colnames(plot_df) <- c("response","percent")
 ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=response), show.legend=FALSE, stat="identity")
 
 ```
+  
 The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will developing this analysis on a small laptop and
 want to keep the the run time to be somewhat reasonable, so we'll build subsets that will contain 10,000 and 1,000 records for the training and testing datasets respectively.
+
+
 
 ```{r build subset, echo=FALSE}
 set.seed(2024)
 test_set <- sample_n(train_data, 5000)
 train_set <- sample_n(train_data, 50000)
-# test_index <- createDataPartition(train_data$id, times=1, p = 0.001, list = FALSE)
-# test_set <- train_data[test_index,]
-# train_set <- train_data[-test_index,]
-dim(test_set)
-dim(train_set)
 train_set_x <- train_set[,-train_set$Response]
 train_set_y <- as.factor(train_set$Response)
-dim(train_set_x)
-dim(train_set_y)
+
 
 start.time <- Sys.time()
 control <- trainControl(method = "cv", number = 10, p = .9)
-x <- train_set_x[, c(-11, -6, -5, -1)]
-train_knn1 <- train(x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,9,2))), trControl = control)
+train_knn1 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,11,2))), trControl = control)
 end.time <- Sys.time()
 time.taken <- round(end.time - start.time)
 time.taken
@@ -142,7 +186,7 @@ if (a < 1) a <- 1
 range <- seq(a,b)
 range
 
-train_knn2 <- train(x, train_set_y, method="knn", tuneGrid = data.frame(k = range), trControl = control)
+train_knn2 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = range), trControl = control)
 
 df_knn2 <- train_knn2$results
 max_accuracy <- which.max(df_knn2$Accuracy)
@@ -151,11 +195,11 @@ max_k <- df_knn2$k[max_accuracy]
 df_knn <- merge(df_knn1, df_knn2, by=c("Accuracy","k", "Kappa", "AccuracySD", "KappaSD"), all=TRUE)
 k_max <- which.max(df_knn$Accuracy)
 
-train_knn <- train(x, train_set_y, method="knn", tuneGrid = data.frame(k = k_max), trControl = control)
+train_knn <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = k_max), trControl = control)
 
-fit_knn <- knn3(x, train_set_y, k=9)
+fit_knn <- knn3(train_set_x, train_set_y, k=9)
 
-y_hat_knn <- predict(fit_knn, x, type="class")
+y_hat_knn <- predict(fit_knn, train_set_x, type="class")
 cm <- confusionMatrix(y_hat_knn, factor(train_set_y))
 cm
 cm$overall["Accuracy"]
@@ -165,26 +209,18 @@ cm$byClass["Specificity"]
 ```
 
 
+```
+Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)?
 
+```{r test_set, echo=FALSE}
+test_set_x <- test_set[,-train_set$Response]
+test_set_y <- as.factor(test_set$Response)
+
+test_y_hat_knn <- predict(fit_knn, test_set_x, type="class")
+test_cm <- confusionMatrix(test_y_hat_knn, factor(test_set_y))
+test_cm
+test_cm$overall["Accuracy"]
+test_cm$byClass["Sensitivity"]
+test_cm$byClass["Specificity"]
 ```
 
-
-We don't touch the *test_set* until we start testing the algorithms we build.
-
-'''
-
-ggplot(data=df) + geom_bar(mapping = aes(x=id, y=percent, fill=id), stat="identity")
-
-merge accuracy tables
-tbls <- merge(tb1, tbl2, by=c("k", "Accuracy", "Kappa"), all=TRUE)
-which.max(tbls$Accuracy)
-df <- as.data.frame(train_knn1[15])
-
-
-
-'''
-df <- data.frame(c(1,2,3,4,5,6,7,8,9), c("male","male","female", "male", "female", "male","female","male","female"))
-> x <- df
-> colnames(x) <- c("index", "gender")
-> x$gender <- ifelse(x$gender == "male",0, 1)
-> x
