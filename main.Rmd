@@ -9,15 +9,16 @@ knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_knit$set(root.dir="c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/")
 knitr::opts_chunk$set(warning=FALSE)
 ```
+
 ### Introduction, setup, loading necessary libraries, and adjust working directories                 
 
 ```{r load libraries, echo=FALSE}
-if (!require(tidyverse)) suppressMessages(install.packages(tidyverse, verbose=FALSE, quietly = TRUE))
+if (!require(tidyverse)) suppressMessages(install.packages(tidyverse, verbose=FALSE, quiet = TRUE))
 if (!require(rvest)) install.packages("rvest", verbose=FALSE)
 if (!require(dplyr)) instsall.packages("dplyr", verbose=FALSE)
 if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
 if (!require(caret)) install.packages("caret", verbose=FALSE)
-if (!require(randomForest)) suppressMessages(install.packages("randomForest", quietly = TRUE, verbose=FALSE))
+if (!require(randomForest)) suppressMessages(install.packages("randomForest", verbose=FALSE))
 
 path <- "c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/"
 setwd(path)
@@ -58,6 +59,7 @@ data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
   # good predictor.
   ifelse (!nzv_arg,   nzv <- nearZeroVar(train_data), nzv <- nzv_arg)
   if (length(nzv) > 0) {
+    for (i in nzv) print(colnames(train_data)[i])
     df <- df[, -nzv]  # remove near zero variances
   }    # end of if (length(nzv) ...
   # This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the   # testing datasets.
@@ -81,6 +83,7 @@ data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
 ```
 ## Description of dataset columns
 ```{r, display column names, echo=FALSE}
+head(train_data)
 
 tbl <- matrix(c(1:36), ncol = 3, byrow= TRUE)
 rownames <- c("Identification", "Gender", "Age (in years)", "Driver's License Nbr", "Region Code", "Previously Insured", "Insured Vehicles Age", "Vehicle Damage",
@@ -107,19 +110,21 @@ Data preparation and cleaning are done by a function so that it can be reused fo
         + checks near zero variance and removes any columns that have a near zero variance 
         + converts the Gender column to numeric 1 or 0 
         + converts the Vehicle_Damage column to numeric 
-        + converts the Vehicle_Age column to a numerical value of the unique values in the column 
+        + converts the vehicle_Age column to a numerical value of the unique values in the column 
 
 ```{r data prep via function}
 train_data <- data_prep(train_data)
 ```
-The near zero variance analysisshows that *Driving_License* and *Annual Premium* are not going to be a good predictor so we should remove them from both the training and the testing datasets.
+This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the testing datasets.
 
 
 ## Preprocessing
-```{r previously_insured}
+One might suspect that there would be no positive responses when there was no previous insurance applied. To determine if this is true we look at the number of positive responses when the column *Previously_insured* is 0.
+```{r previousl;y_insured}
 num <- sum(train_data$Previously_Insured == 0 & train_data$Response == TRUE)
+num
 ```
-One might suspect that there would be no positive responses when there was no previous insurance applied. To determine if this is true we look at the number of positive responses when the column *Previously_insured* is 0,which is 'r num` records. This shows that our suspicion is not valid and we need to consider *Previously_insured* as a feature.
+This shows that our suspicion is not valid and we need to consider *Previously_insured* as a feature.
 
 
 We now consider the *Response* column. What percentage of the reponses are positive, that is, how many cross-selling attempts were successful. We then ask the question if there are any vehicles that are not insured that have a positive response.
@@ -129,21 +134,27 @@ response_mean <- mean(train_data$Response)
 plot_df <- data.frame(c("negative", "positive"), c(1-response_mean, response_mean))
 colnames(plot_df) <- c("response","percent")
 
-ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=response), show.legend=FALSE, stat="identity")    
+ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=response), show.legend=FALSE, stat="identity")
 
 ```
 THe graph shows that there is a definite component of positive response from customers that have not purchased insurance before.
 
-The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will be developing this analysis on a small laptop and want to keep the the run time to be somewhat reasonable, so we'll build subsets that will contain 50,000 and 5,000 records for the training and testing datasets respectively.
+The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will developing this analysis on a small laptop and
+want to keep the the run time to be somewhat reasonable, so we'll build subsets that will contain 10,000 and 1,000 records for the training and testing datasets respectively.
 
 
 
-```{r build subset, echo=FALSE}
+```{r build subset, echo=FALSE, error=TRUE}
 set.seed(2024)
-test_set <- sample_n(train_data, 5000)
 train_set <- sample_n(train_data, 50000)
 train_set_x <- train_set[,-train_set$Response]
 train_set_y <- as.factor(train_set$Response)
+test_sets <- list()
+for (i in 1:10) {
+  test_set  <- sample_n(train_data, 5000)
+  test_sets <- list.append(test_sets, test_set)
+}
+
 ```
 
 We use the k-NN method of training hich has a parameter of k. We examine the accuracy of the training for various values of k. We initially 
@@ -165,7 +176,6 @@ if (a < 1) a <- 1
 range <- seq(a,b)
 
 ```
-The value of k that was determined from the first iteration was `r max_k`. We use this number to pick another range for k as 'r range'.
 
 ```{r second set of training, echo = FALSE}
 
@@ -175,7 +185,7 @@ df_knn2 <- train_knn2$results
 max_accuracy <- which.max(df_knn2$Accuracy)
 max_k <- df_knn2$k[max_accuracy]
 
-df_knn <- merge(df_knn1, df_knn2, by=c("Accuracy","k", "Kappa", "AccuracySD", "KappaSD"), all=TRUE) %>% arrange(k)
+df_knn <- merge(df_knn1, df_knn2, by=c("Accuracy","k", "Kappa", "AccuracySD", "KappaSD"), all=TRUE)
 ```
 From this second set of iterations, the maximum k value that we should use is `r max_k`. The final algorithm is calculated with this vsalue.
 
@@ -184,70 +194,104 @@ train_knn <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame
 
 fit_knn <- knn3(train_set_x, train_set_y, k=9)
 
+y_hat_knn <- predict(fit_knn, train_set_x, type="class")
+cm <- confusionMatrix(y_hat_knn, factor(train_set_y))
+cm
+cm$overall["Accuracy"]
+cm$byClass["Sensitivity"]
+cm$byClass["Specificity"]
 
 ```
 
-```{r verify function, echo=FALSE}
 
-verify_fit <-function(sample, fit){
-  # x <- sample[, -sample$Response]
-  # y <- as.factor(sample$Response)
-  x <- sample %>% select(-Response)
-  y <- as.factor(sample$Response)
-  verify_y_hat <- predict(fit, x, type = "class")
-  verify_cm <- confusionMatrix(verify_y_hat, factor(y))
-  verify_cm
-  verify_cm$overall["Accuracy"]
-  verify_cm$byClass["Sensitivity"]
-  verify_cm$byClass["Specificity"]
-  print(paste("Accuracy:", verify_cm$overall["Accuracy"], "  Sensitivity:", verify_cm$byClass["Sensitivity"], "  Specificity",   verify_cm$byClass["Specificity"]))}
+Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)?
+
+```{r test_sets, echo=FALSE}
+knn_fcn <- function(test_set) {
+  test_set_y <- as.factor(test_set$Response)
+  test_set_x <- test_set %>% select(-Response)
+  y_hat <- predict(knn_rf, test_set_x, type = "class")
+  cm <- confusionMatrix(y_hat, factor(test_set_y))
+  print(paste("Accuracy: ", cm$overall["Accuracy"], 
+              "Sensitivity: ", cm$byClass["Sensitivity"],
+              "Specificity: ", cm$byClass["Specificity"]))
+}
+
+lapply(test_sets, knn_fcn)
+
 ```
 
-
-Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)? The original data set was quite large so we can take 10 different samples and calculate the accurcy for each of these 10 datasets.
-
-```{r test_set, echo=FALSE}
-
-for (i in 1:10) {
-  test_set <- sample_n(train_data, 5000)
-  verify_fit(test_set, fit_knn)
-  }
-```
-
-This algorithm ws based on the k-NN (nearest neighbor). Other models should be tested for comparisons. The first alternative to attempt is random forest, which is a compute-intensive model. There are several parameters that can be tuned to adjust the model and we will need to built a multitude of trees. As a result of this, we will only use a five-fold cross validation. One feature of the random forest model is that we can easily see which feature has the most influence of the result.
+This algorithm ws based on the k-NN (nearest neighbor). Other models should be tested for comparisons. The first alternative to attempt is random forest, which is a compute-intensive model. There are several parameters that can be tuned to adjust the model and we will need to built a multitude of trees. As a result of this, we will only use a five-fold cross validation.
 
 ```{r random forest, echo = FALSE}
-test_set_x <- train_set %>% select(-Response)
-test_set_y <- as.factor(train_set$Response)
+accum_accuracy <- 0
+knn_fcn <- function(test_set) {
+  test_set_y <- as.factor(test_set$Response)
+  test_set_x <- test_set %>% select(-Response)
+  y_hat <- predict(fit_rf, test_set_x, type = "class")
+  cm <- confusionMatrix(y_hat, factor(test_set_y))
+  print(paste("Accuracy: ", cm$overall["Accuracy"], 
+              "Sensitivity: ", cm$byClass["Sensitivity"],
+              "Specificity: ", cm$byClass["Specificity"]))
+  accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
+}
+
+test_set_x <- test_set %>% select(-Response)
+test_set_y <- as.factor(test_set$Response)
 control <- trainControl(method = "cv", number = 5)
 grid <- data.frame(mtry = c(1,2,3))
 train_rf <- train(test_set_x, test_set_y, method="rf", ntree = 500, trControl = control, tuneGrid = grid, nSamp = 10000)
-train_rf
-
 fit_rf <- randomForest(test_set_x, test_set_y, mtry = train_rf$bestTune$mtry)
-for (i in 1:10) {
-  rf_y_hat <- predict(fit_rf, test_set_x, type="class")
-  cm_rf <- confusionMatrix(rf_y_hat, factor(test_set_y))
-  print(paste("Accuracy:", cm_rf$overall["Accuracy"], "  Sensitivity:", cm_rf$byClass["Sensitivity"], "  Specificity",   cm_rf$byClass["Specificity"]))
-}
-```
-We see that the most important feature if whether the vehicle has been damaged followed closely by whether the customer has been previously insured.
 
-```{r importance, echo=FALSE}
+lapply(test_sets, knn_fcn)
+
+accum_accuracy / 10
+
+
+```
+The average of these 10 test cases is `r accum_accuracy`. We can see that the most important feature is whether the vehicle has been damaged followe closelyby whether thre customer has been previous insured.
+```{r graph importance}
 importance <- fit_rf$importance
 colnames(importance) <- c("Mean")
 sorted_importance <- as.data.frame(importance[order(importance[,"Mean"]),])
 colnames(sorted_importance) <- c("sorted_importance")
 
+
 xlabls <- gsub("_", " ", rownames(sorted_importance))
-ggplot(data=sorted_importance, aes(x = reorder(xlabls, -sorted_importance), y=sorted_importance)) + 
+ggplot(data=sorted_importance, aes(x = reorder(xlabls, -sorted_importance), y=sorted_importance, fill=reorder(xlabls, -sorted_importance))) + 
   geom_bar(show.legend=FALSE, stat="identity") +
   xlab("Feature") +
   ylab("Percent") +
+  ylim(0, 100) +
   ggtitle("Relative Importance") +
   theme(plot.title = element_text(hjust = 0.5, size = 9)) +
   guides(x = guide_axis(angle = 90))  
+```
+    
+### Ensemble
+We can combine the two models that we have tried (knn and random forest) to determine if the combination is better than either one. 
+```{r ensemble, echo=FALSE}
+ensemble_fcn <- function(test_set) {
+  test_set_y <- as.factor(test_set$Response)
+  test_set_x <- test_set %>% select(-Response)
+  
+  p_rf <- predict(fit_rf, test_set_x, type = "prob")
+  p_rf <- p_rf / rowSums(p_rf)
+  p_knn <- predict(fit_knn, test_set_x)
+  p <- (p_rf + p_knn) / 2
+  y_pred <- factor(apply(p, 1, which.max)-1)
+  accum_accuracy <<- accum_accuracy + confusionMatrix(y_pred, test_set_y)$overall["Accuracy"]
+  
+}
+accum_accuracy <- 0
+lapply(test_sets, ensemble_fcn)
+accuracy <- accum_accuracy / 10
+
 
 ```
-### Conclusion
 
+### Other models (taking defaults)
+
+
+### Conclusion
+TBD
