@@ -6,7 +6,6 @@ output: html_document
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
-knitr::opts_knit$set(root.dir="c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/")
 knitr::opts_chunk$set(warning=FALSE)
 ```
 
@@ -18,10 +17,9 @@ if (!require(rvest)) install.packages("rvest", verbose=FALSE)
 if (!require(dplyr)) instsall.packages("dplyr", verbose=FALSE)
 if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
 if (!require(caret)) install.packages("caret", verbose=FALSE)
-if (!require(randomForest)) suppressMessages(install.packages("randomForest", verbose=FALSE))
+if (!require(caret)) install.packages("caret", verbose=FALSE)
+if (!require(rlist)) suppressMessages(install.packages("rlist", verbose=FALSE))
 
-path <- "c:/users/ehodgdon/OneDrive/HarvardX/Data_Science/DataScienceProjects/DataScience/"
-setwd(path)
 getwd()
 ```
 ## Problem Definition
