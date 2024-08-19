@@ -9,7 +9,14 @@ knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning=FALSE)
 ```
 
-### Introduction, setup, loading necessary libraries, and adjust working directories                 
+### Introduction, setup, loading necessary libraries, and adjust working directories   
+```{r}
+NUMBER_OF_TEST_SETS = 10
+NUMBER_OF_TRAINING_ROWS = 50000
+NUMbER_OF_TEST_ROWS = 5000
+
+```
+
 
 ```{r load libraries, echo=FALSE}
 if (!require(tidyverse)) suppressMessages(install.packages(tidyverse, verbose=FALSE, quiet = TRUE))
@@ -19,6 +26,7 @@ if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
 if (!require(caret)) install.packages("caret", verbose=FALSE)
 if (!require(caret)) install.packages("caret", verbose=FALSE)
 if (!require(rlist)) suppressMessages(install.packages("rlist", verbose=FALSE))
+if (!require(randomForest)) suppressMessages(install.packages("randomForest", verbose=FALSE))
 
 getwd()
 ```
@@ -81,8 +89,6 @@ data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
 ```
 ## Description of dataset columns
 ```{r, display column names, echo=FALSE}
-head(train_data)
-
 tbl <- matrix(c(1:36), ncol = 3, byrow= TRUE)
 rownames <- c("Identification", "Gender", "Age (in years)", "Driver's License Nbr", "Region Code", "Previously Insured", "Insured Vehicles Age", "Vehicle Damage",
              "Annual Premium", "Policy Sales Channel", "Vintage", "Response")
@@ -135,21 +141,21 @@ colnames(plot_df) <- c("response","percent")
 ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=response), show.legend=FALSE, stat="identity")
 
 ```
-THe graph shows that there is a definite component of positive response from customers that have not purchased insurance before.
+The graph shows that there is a definite component of positive response from customers that have not purchased insurance before.
 
-The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will developing this analysis on a small laptop and
-want to keep the the run time to be somewhat reasonable, so we'll build subsets that will contain 10,000 and 1,000 records for the training and testing datasets respectively.
+The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will be developing this analysis on a small laptop and
+want to keep the the run time to be somewhat reasonable, so we will build subsets that will contain `r NUMBER_OF_TRAINING_ROWS` and `r NUMBER_OF_TEST_ROWS` records for the training and testing datasets respectively. There will be a total of `r NUMBER_OF_TEST_SETS` testing datasets sampled from the entire training set. When training and evaluating of the various models, the same datasets will be used.
 
 
 
-```{r build subset, echo=FALSE, error=TRUE}
+```{r build subset, echo=FALSE, error=FALSE}
 set.seed(2024)
-train_set <- sample_n(train_data, 50000)
-train_set_x <- train_set[,-train_set$Response]
+train_set <- sample_n(train_data, NUMBER_OF_TRAINING_ROWS)
+train_set_x <- train_set %>% select(-Response)
 train_set_y <- as.factor(train_set$Response)
 test_sets <- list()
-for (i in 1:10) {
-  test_set  <- sample_n(train_data, 5000)
+for (i in 1:NUMBER_OF_TEST_SETS) {
+  test_set  <- sample_n(train_data, NUMER_OF_TEST_ROWS)
   test_sets <- list.append(test_sets, test_set)
 }
 
@@ -159,10 +165,12 @@ We use the k-NN method of training hich has a parameter of k. We examine the acc
 try a k in the set of `r seq(3, 11, 2)`
 
 ```{r first set of training, echo=FALSE}
+k_hist <- list()
 control <- trainControl(method = "cv", number = 10, p = .9)
 train_knn1 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,11,2))), trControl = control)
 
 df_knn1 <- train_knn1$results     # extract results as a data frame
+k_hist <- append(k_hist, df_knn1)
 
 max_accuracy <- which.max(df_knn1$Accuracy)
 max_k <- df_knn1$k[max_accuracy]
@@ -185,19 +193,13 @@ max_k <- df_knn2$k[max_accuracy]
 
 df_knn <- merge(df_knn1, df_knn2, by=c("Accuracy","k", "Kappa", "AccuracySD", "KappaSD"), all=TRUE)
 ```
-From this second set of iterations, the maximum k value that we should use is `r max_k`. The final algorithm is calculated with this vsalue.
+From this second set of iterations, the maximum k value that we should use is `r max_k`. The final algorithm is calculated with this value.
 
 ```{r final train, echo=FALSE}
 train_knn <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = max_k), trControl = control)
 
-fit_knn <- knn3(train_set_x, train_set_y, k=9)
+fit_knn <- knn3(train_set_x, train_set_y, k=max_k)
 
-y_hat_knn <- predict(fit_knn, train_set_x, type="class")
-cm <- confusionMatrix(y_hat_knn, factor(train_set_y))
-cm
-cm$overall["Accuracy"]
-cm$byClass["Sensitivity"]
-cm$byClass["Specificity"]
 
 ```
 
@@ -205,6 +207,7 @@ cm$byClass["Specificity"]
 Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)?
 
 ```{r test_sets, echo=FALSE}
+accum_accuracy <- 0
 knn_fcn <- function(test_set) {
   test_set_y <- as.factor(test_set$Response)
   test_set_x <- test_set %>% select(-Response)
@@ -213,9 +216,11 @@ knn_fcn <- function(test_set) {
   print(paste("Accuracy: ", cm$overall["Accuracy"], 
               "Sensitivity: ", cm$byClass["Sensitivity"],
               "Specificity: ", cm$byClass["Specificity"]))
+  accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
 }
 
 lapply(test_sets, knn_fcn)
+print(paste("k-NN accuracy: ", as.character(accum_accuracy / NUMBER_OF_TEST_SETS)))
 
 ```
 
@@ -238,20 +243,26 @@ test_set_x <- test_set %>% select(-Response)
 test_set_y <- as.factor(test_set$Response)
 control <- trainControl(method = "cv", number = 5)
 grid <- data.frame(mtry = c(1,2,3))
-train_rf <- train(test_set_x, test_set_y, method="rf", ntree = 500, trControl = control, tuneGrid = grid, nSamp = 10000)
-fit_rf <- randomForest(test_set_x, test_set_y, mtry = train_rf$bestTune$mtry)
+train_rf <- train(train_set_x, train_set_y, method="rf", ntree = 500, trControl = control, tuneGrid = grid, nSamp = 10000)
+fit_rf <- randomForest(train_set_x, train_set_y, mtry = train_rf$bestTune$mtry)
+y_hat_rf <- predict(fit_rf, train_set_x, type="class")
+cm <- confusionMatrix(y_hat_rf, factor(train_set_y))
+cm$overall["Accuracy"]
+cm$byClass["Sensitivity"]
+cm$byClass["Specificity"]
+
 
 lapply(test_sets, rf_fcn)
 
-print(paste("Accuracy:", accum_accuracy / 10))
+print(paste("random forest accuracy:", as.character(accum_accuracy / 10)))
 
 
 ```
-The average of these 10 test cases is `r accum_accuracy`. We can see that the most important feature is whether the vehicle has been damaged followe closelyby whether thre customer has been previous insured.
+The average of these 10 test cases is `r accum_accuracy`. We can see that the most important feature is whether the vehicle has been damaged followe closelyby whether the customer has been previous insured.
 ```{r graph importance}
 importance <- fit_rf$importance
 colnames(importance) <- c("Mean")
-sorted_importance <- as.data.frame(importance[order(importance[,"Mean"]),])
+sorted_importance <- as.data.frame(importance[order(importance[,"Mean"]),]) * 100/ sum(importance)
 colnames(sorted_importance) <- c("sorted_importance")
 
 
@@ -260,7 +271,7 @@ ggplot(data=sorted_importance, aes(x = reorder(xlabls, -sorted_importance), y=so
   geom_bar(show.legend=FALSE, stat="identity") +
   xlab("Feature") +
   ylab("Percent") +
-  ylim(0, 100) +
+  ylim(0, 50) +
   ggtitle("Relative Importance") +
   theme(plot.title = element_text(hjust = 0.5, size = 9)) +
   guides(x = guide_axis(angle = 90))  
@@ -283,7 +294,7 @@ ensemble_fcn <- function(test_set) {
 }
 accum_accuracy <- 0
 lapply(test_sets, ensemble_fcn)
-accuracy <- accum_accuracy / 10
+print(paste("Ensemble accuracy: ", as.character(accum_accuracy / 10)))
 
 
 ```
@@ -294,3 +305,20 @@ The end
 
 ### Conclusion
 TBD
+
+'''
+
+train_set_x <- train_set %>% select(-Response)
+train_set_y <- as.factor(train_set$Response)
+
+fit_model <- kknn(train_set_x, train_set_y)
+
+y_hat_model <- predict(fit_model, train_set_x, type="class")
+cm <- confusionMatrix(y_hat_model, factor(test_set_y))
+print(paste("Accuracy: ", cm$overall["Accuracy"], 
+              "Sensitivity: ", cm$byClass["Sensitivity"],
+              "Specificity: ", cm$byClass["Specificity"]))
+
+
+
+'''
