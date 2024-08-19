@@ -208,7 +208,7 @@ Now consider the test set that we carved from the original data set. How does it
 knn_fcn <- function(test_set) {
   test_set_y <- as.factor(test_set$Response)
   test_set_x <- test_set %>% select(-Response)
-  y_hat <- predict(knn_rf, test_set_x, type = "class")
+  y_hat <- predict(fit_knn, test_set_x, type = "class")
   cm <- confusionMatrix(y_hat, factor(test_set_y))
   print(paste("Accuracy: ", cm$overall["Accuracy"], 
               "Sensitivity: ", cm$byClass["Sensitivity"],
@@ -223,7 +223,7 @@ This algorithm ws based on the k-NN (nearest neighbor). Other models should be t
 
 ```{r random forest, echo = FALSE}
 accum_accuracy <- 0
-knn_fcn <- function(test_set) {
+rf_fcn <- function(test_set) {
   test_set_y <- as.factor(test_set$Response)
   test_set_x <- test_set %>% select(-Response)
   y_hat <- predict(fit_rf, test_set_x, type = "class")
@@ -241,9 +241,9 @@ grid <- data.frame(mtry = c(1,2,3))
 train_rf <- train(test_set_x, test_set_y, method="rf", ntree = 500, trControl = control, tuneGrid = grid, nSamp = 10000)
 fit_rf <- randomForest(test_set_x, test_set_y, mtry = train_rf$bestTune$mtry)
 
-lapply(test_sets, knn_fcn)
+lapply(test_sets, rf_fcn)
 
-accum_accuracy / 10
+print(paste("Accuracy:", accum_accuracy / 10))
 
 
 ```
@@ -289,6 +289,7 @@ accuracy <- accum_accuracy / 10
 ```
 
 ### Other models (taking defaults)
+The end
 
 
 ### Conclusion
