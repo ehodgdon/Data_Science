@@ -13,12 +13,12 @@ knitr::opts_chunk$set(warning=FALSE)
 ```{r}
 NUMBER_OF_TEST_SETS = 10
 NUMBER_OF_TRAINING_ROWS = 50000
-NUMbER_OF_TEST_ROWS = 5000
+NUMBER_OF_TEST_ROWS = 5000
 
 ```
 
 
-```{r load libraries, echo=FALSE}
+```{r load libraries, echo=FALSE, include=FALSE}
 if (!require(tidyverse)) suppressMessages(install.packages(tidyverse, verbose=FALSE, quiet = TRUE))
 if (!require(rvest)) install.packages("rvest", verbose=FALSE)
 if (!require(dplyr)) instsall.packages("dplyr", verbose=FALSE)
@@ -37,7 +37,7 @@ The column *Result* as integer (0 or 1) indicates whether a resale was successfu
 
 
 ### Input the training dataset and data prep
-Kaggle provides two datasets -- training and test -- but the test dataset is only used to judge the developed algorithm. It is missing the *Response* column.We will do some work on the entire training dataset and then split it into two smaller datasets that we can reasonably handle.
+Kaggle provides two datasets -- training and test -- but the test dataset is only used to judge the developed algorithm. It is missing the *Response* column.We will do some work on the entire training dataset and then split it into smaller datasets that we can reasonably handle.
 ```{r read datasets, echo = FALSE}
 train_data <- read.csv("insurance-train.csv")
 
@@ -65,9 +65,10 @@ data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
   # good predictor.
   ifelse (!nzv_arg,   nzv <- nearZeroVar(train_data), nzv <- nzv_arg)
   if (length(nzv) > 0) {
-    for (i in nzv) print(colnames(train_data)[i])
+    for (i in nzv) {
     df <- df[, -nzv]  # remove near zero variances
-  }    # end of if (length(nzv) ...
+    }
+  }                   # end of if (length(nzv) ...
   # This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the   # testing datasets.
   
   # convert the Gender column from "Male", "Female" to 0 and 1df
@@ -106,9 +107,9 @@ knitr::kable(tbl, caption = "Column Names in Dataset", align="c")
 ```
 
 ### Data Preparation
-Data preparation and cleaning are done by a function so that it can be reused for different test and training data sets.
+Data preparation and cleaning are done by a function so that it can be reused for different test and training data sets, if necessary.
 
-    * The function provides the following operations list
+    * The function provides the following operations
         + removal of any NAs 
         + removal of any rows that contain blanks 
         + checks near zero variance and removes any columns that have a near zero variance 
@@ -119,11 +120,11 @@ Data preparation and cleaning are done by a function so that it can be reused fo
 ```{r data prep via function}
 train_data <- data_prep(train_data)
 ```
-This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the testing datasets.
+This shows that Driving_License and Annual Premium are not going to be a good predictor so we should remove them from both the training and the testing datasets.
 
 
 ## Preprocessing
-One might suspect that there would be no positive responses when there was no previous insurance applied. To determine if this is true we look at the number of positive responses when the column *Previously_insured* is 0.
+One might suspect that there would be no positive responses when there was no previous insurance applied. To determine if this is true we look at the number of positive responses when the column *Previously_Insured* is 0.
 ```{r previousl;y_insured}
 num <- sum(train_data$Previously_Insured == 0 & train_data$Response == TRUE)
 num
@@ -138,7 +139,7 @@ response_mean <- mean(train_data$Response)
 plot_df <- data.frame(c("negative", "positive"), c(1-response_mean, response_mean))
 colnames(plot_df) <- c("response","percent")
 
-ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=response), show.legend=FALSE, stat="identity")
+ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=response), show.legend=FALSE, stat="identity")    
 
 ```
 The graph shows that there is a definite component of positive response from customers that have not purchased insurance before.
@@ -155,13 +156,13 @@ train_set_x <- train_set %>% select(-Response)
 train_set_y <- as.factor(train_set$Response)
 test_sets <- list()
 for (i in 1:NUMBER_OF_TEST_SETS) {
-  test_set  <- sample_n(train_data, NUMER_OF_TEST_ROWS)
+  test_set  <- sample_n(train_data, NUMBER_OF_TEST_ROWS)
   test_sets <- list.append(test_sets, test_set)
 }
 
 ```
 
-We use the k-NN method of training hich has a parameter of k. We examine the accuracy of the training for various values of k. We initially 
+We use the k-NN method of training which has a parameter of k. We examine the accuracy of the training for various values of k. We initially 
 try a k in the set of `r seq(3, 11, 2)`
 
 ```{r first set of training, echo=FALSE}
@@ -170,7 +171,7 @@ control <- trainControl(method = "cv", number = 10, p = .9)
 train_knn1 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,11,2))), trControl = control)
 
 df_knn1 <- train_knn1$results     # extract results as a data frame
-k_hist <- append(k_hist, df_knn1)
+k_hist <- list.append(k_hist, df_knn1)
 
 max_accuracy <- which.max(df_knn1$Accuracy)
 max_k <- df_knn1$k[max_accuracy]
@@ -204,12 +205,13 @@ fit_knn <- knn3(train_set_x, train_set_y, k=max_k)
 ```
 
 
-Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)?
+Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)? Here are the accuracy results for the k-NN model:
 
-```{r test_sets, echo=FALSE}
+```{r test_sets, echo=FALSE, include=FALSE)
 accum_accuracy <- 0
 knn_fcn <- function(test_set) {
-  test_set_y <- as.factor(test_set$Response)
+  df <- as.data.frame(test_set)
+  test_set_y <- df$Response
   test_set_x <- test_set %>% select(-Response)
   y_hat <- predict(fit_knn, test_set_x, type = "class")
   cm <- confusionMatrix(y_hat, factor(test_set_y))
@@ -226,7 +228,7 @@ print(paste("k-NN accuracy: ", as.character(accum_accuracy / NUMBER_OF_TEST_SETS
 
 This algorithm ws based on the k-NN (nearest neighbor). Other models should be tested for comparisons. The first alternative to attempt is random forest, which is a compute-intensive model. There are several parameters that can be tuned to adjust the model and we will need to built a multitude of trees. As a result of this, we will only use a five-fold cross validation.
 
-```{r random forest, echo = FALSE}
+```{r random forest, echo = FALSE, include=FALSE}
 accum_accuracy <- 0
 rf_fcn <- function(test_set) {
   test_set_y <- as.factor(test_set$Response)
@@ -279,7 +281,7 @@ ggplot(data=sorted_importance, aes(x = reorder(xlabls, -sorted_importance), y=so
     
 ### Ensemble
 We can combine the two models that we have tried (knn and random forest) to determine if the combination is better than either one. 
-```{r ensemble, echo=FALSE}
+```{r ensemble, echo=FALSE, include=FALSE}
 ensemble_fcn <- function(test_set) {
   test_set_y <- as.factor(test_set$Response)
   test_set_x <- test_set %>% select(-Response)
