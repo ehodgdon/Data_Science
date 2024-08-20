@@ -13,7 +13,7 @@ knitr::opts_chunk$set(warning=FALSE)
 ```{r}
 NUMBER_OF_TEST_SETS = 10
 NUMBER_OF_TRAINING_ROWS = 50000
-NUMbER_OF_TEST_ROWS = 5000
+NUMBER_OF_TEST_ROWS = 5000
 
 ```
 
@@ -155,7 +155,7 @@ train_set_x <- train_set %>% select(-Response)
 train_set_y <- as.factor(train_set$Response)
 test_sets <- list()
 for (i in 1:NUMBER_OF_TEST_SETS) {
-  test_set  <- sample_n(train_data, NUMER_OF_TEST_ROWS)
+  test_set  <- sample_n(train_data, NUMBER_OF_TEST_ROWS)
   test_sets <- list.append(test_sets, test_set)
 }
 
