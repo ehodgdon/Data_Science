@@ -28,20 +28,8 @@ if (!require(caret)) install.packages("caret", verbose=FALSE)
 if (!require(rlist)) suppressMessages(install.packages("rlist", verbose=FALSE))
 if (!require(randomForest)) suppressMessages(install.packages("randomForest", verbose=FALSE))
 
-getwd()
 ```
-## Problem Definition
-The goal of this analysis is to predict which customers respond positively to an automobile insurance offer.
-
-The column *Result* as integer (0 or 1) indicates whether a resale was successful with this customer.
-
-
-### Input the training dataset and data prep
-Kaggle provides two datasets -- training and test -- but the test dataset is only used to judge the developed algorithm. It is missing the *Response* column.We will do some work on the entire training dataset and then split it into smaller datasets that we can reasonably handle.
-```{r read datasets, echo = FALSE}
-train_data <- read.csv("insurance-train.csv")
-
-
+```{r function definitions}
 data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
   # check for any rows containing NAs
   na_counts <- train_data %>% summarise_all(~ sum(is.na(.)))
@@ -63,13 +51,13 @@ data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
 
   # Using the nearZeroVar() function from the caret package,we can determine which predictors are near zero variance and therefore would not be a
   # good predictor.
-  ifelse (!nzv_arg,   nzv <- nearZeroVar(train_data), nzv <- nzv_arg)
-  if (length(nzv) > 0) {
-    for (i in nzv) {
-    df <- df[, -nzv]  # remove near zero variances
+  ifelse (!nzv_arg,   train_nzv <- nearZeroVar(train_data), train_nzv <- nzv_arg)
+  if (length(train_nzv) > 0) {
+    for (i in train_nzv) {
+    df <- df[, -train_nzv]  # remove near zero variances
     }
-  }                   # end of if (length(nzv) ...
-  # This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the   # testing datasets.
+  }  # end of if (length(nzv) ...
+   
   
   # convert the Gender column from "Male", "Female" to 0 and 1df
   df$Gender <- ifelse(df$Gender == "Male", 0, 1)
@@ -85,8 +73,54 @@ data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
 
 
  return (df)
-}   # end of function
+}      # end of data_prep function
 
+  
+xknn_fcn <- function(test_set) {
+  df <- as.data.frame(test_set)
+  test_set_y <- df$Response
+  test_set_x <- test_set %>% select(-Response)
+  y_hat <- predict(fit_knn, test_set_x, type = "class")
+  cm <- confusionMatrix(y_hat, factor(test_set_y))
+  print(paste("Accuracy: ", cm$overall["Accuracy"], 
+              "Sensitivity: ", cm$byClass["Sensitivity"],
+              "Specificity: ", cm$byClass["Specificity"]))
+  accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
+}
+
+
+rf_fcn <- function(test_set) {
+  test_set_y <- as.factor(test_set$Response)
+  test_set_x <- test_set %>% select(-Response)
+  y_hat <- predict(fit_rf, test_set_x, type = "class")
+  cm <- confusionMatrix(y_hat, factor(test_set_y))
+  print(paste("Accuracy: ", cm$overall["Accuracy"], 
+              "Sensitivity: ", cm$byClass["Sensitivity"],
+              "Specificity: ", cm$byClass["Specificity"]))
+  accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
+}
+
+
+```
+
+
+### Problem Definition
+The goal of this analysis is to predict which customers respond positively to an automobile insurance offer.
+
+The column *Result* as integer (0 or 1) indicates whether a resale was successful with this customer.
+
+
+### Input the training dataset and data prep
+Kaggle provides two datasets -- training and test -- but the test dataset is only used to judge the developed algorithm. It is missing the *Response* column.We will do some work on the entire training dataset and then split it into smaller datasets that we can reasonably handle.
+```{r read datasets, echo = FALSE}
+
+# train_data <- read.csv("insurance-train.csv")
+train_data <- read.csv("small_insurance_train.csv")
+
+
+  # This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the   # testing datasets.
+  
+ 
 ```
 ## Description of dataset columns
 ```{r, display column names, echo=FALSE}
@@ -208,19 +242,8 @@ fit_knn <- knn3(train_set_x, train_set_y, k=max_k)
 Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)? Here are the accuracy results for the k-NN model:
 
 ```{r test_sets, echo=FALSE, include=FALSE)
-accum_accuracy <- 0
-knn_fcn <- function(test_set) {
-  df <- as.data.frame(test_set)
-  test_set_y <- df$Response
-  test_set_x <- test_set %>% select(-Response)
-  y_hat <- predict(fit_knn, test_set_x, type = "class")
-  cm <- confusionMatrix(y_hat, factor(test_set_y))
-  print(paste("Accuracy: ", cm$overall["Accuracy"], 
-              "Sensitivity: ", cm$byClass["Sensitivity"],
-              "Specificity: ", cm$byClass["Specificity"]))
-  accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
-}
 
+accum_accuracy <- 0
 lapply(test_sets, knn_fcn)
 print(paste("k-NN accuracy: ", as.character(accum_accuracy / NUMBER_OF_TEST_SETS)))
 
@@ -230,16 +253,6 @@ This algorithm ws based on the k-NN (nearest neighbor). Other models should be t
 
 ```{r random forest, echo = FALSE, include=FALSE}
 accum_accuracy <- 0
-rf_fcn <- function(test_set) {
-  test_set_y <- as.factor(test_set$Response)
-  test_set_x <- test_set %>% select(-Response)
-  y_hat <- predict(fit_rf, test_set_x, type = "class")
-  cm <- confusionMatrix(y_hat, factor(test_set_y))
-  print(paste("Accuracy: ", cm$overall["Accuracy"], 
-              "Sensitivity: ", cm$byClass["Sensitivity"],
-              "Specificity: ", cm$byClass["Specificity"]))
-  accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
-}
 
 test_set_x <- test_set %>% select(-Response)
 test_set_y <- as.factor(test_set$Response)
