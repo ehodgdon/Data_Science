@@ -114,12 +114,9 @@ The column *Result* as integer (0 or 1) indicates whether a resale was successfu
 Kaggle provides two datasets -- training and test -- but the test dataset is only used to judge the developed algorithm. It is missing the *Response* column.We will do some work on the entire training dataset and then split it into smaller datasets that we can reasonably handle.
 ```{r read datasets, echo = FALSE}
 
-# train_data <- read.csv("insurance-train.csv")
-train_data <- read.csv("small_insurance_train.csv")
+train_data <- read.csv("insurance-train.csv")
+# train_data <- read.csv("small_insurance_train.csv")
 
-
-  # This shows that Driving_License and annual premium are not going to be a good predictor so we should remove them from both the training and the   # testing datasets.
-  
  
 ```
 ## Description of dataset columns
@@ -202,7 +199,7 @@ try a k in the set of `r seq(3, 11, 2)`
 ```{r first set of training, echo=FALSE}
 k_hist <- list()
 control <- trainControl(method = "cv", number = 10, p = .9)
-train_knn1 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,11,2))), trControl = control)
+train_knn1 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,11,2),18)), trControl = control)
 
 df_knn1 <- train_knn1$results     # extract results as a data frame
 k_hist <- list.append(k_hist, df_knn1)
@@ -214,13 +211,13 @@ a <- max_k - 2
 b <- max_k + 2
 if (a < 1) a <- 1
 
-range <- seq(a,b)
+# range <- seq(a,b)
 
 ```
 
 ```{r second set of training, echo = FALSE}
 
-train_knn2 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = range), trControl = control)
+train_knn2 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = seq(a,b)), trControl = control)
 
 df_knn2 <- train_knn2$results
 max_accuracy <- which.max(df_knn2$Accuracy)
@@ -235,6 +232,13 @@ train_knn <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame
 
 fit_knn <- knn3(train_set_x, train_set_y, k=max_k)
 
+```
+We picked a value of `r max_k` for our calculations. Let's examine the derivation of this number
+
+```{r graghing value of k}
+all_k <- full_join(df_knn1, df_knn2)
+sorted_k <- all_k[order(all_k$k),]
+ggplot(sorted_k, aes(x=k, y=Accuracy))+ geom_line()
 
 ```
 
