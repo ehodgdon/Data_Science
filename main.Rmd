@@ -76,7 +76,7 @@ data_prep <- function(df, nzv_arg = FALSE, response = TRUE) {
 }      # end of data_prep function
 
   
-xknn_fcn <- function(test_set) {
+knn_fcn <- function(test_set) {
   df <- as.data.frame(test_set)
   test_set_y <- df$Response
   test_set_x <- test_set %>% select(-Response)
@@ -101,6 +101,31 @@ rf_fcn <- function(test_set) {
 }
 
 
+
+glm_model <- function(dp, fam = gaussian()) {
+model <- glm(Response ~ Previously_Insured + Vehicle_Age + Vehicle_Damage + Vehicle_Age, 
+                family = fam, data = dp)
+summary(model)
+y_hat <- predict(model, dp %>% select(-Response), type="response")
+cutoff <- quantile(y_hat, 0.18)
+pred_glm <- ifelse(y_hat < 0.0006104226, "1", "0")
+pred_glm = as.factor(pred_glm)
+
+cm <- confusionMatrix(as.factor(dp$Response), pred_glm)
+return (cm)
+}
+
+
+n_bayes <- function(dp) {
+  dp_y <- as.factor(dp$Response)
+  dp_x <- dp %>% select(-Response)
+
+  bayes <- train(as.factor(Response) ~ Vehicle_Damage + Previously_Insured + Age + Vehicle_Age, method="naive_bayes", data = dp, usepoisson = TRUE)
+  y_hat <- predict(bayes, dp_x)
+  cm <- confusionMatrix(y_hat, dp_y)
+  cm
+}
+
 ```
 
 
@@ -119,7 +144,7 @@ train_data <- read.csv("insurance-train.csv")
 
  
 ```
-## Description of dataset columns
+### Description of dataset columns
 ```{r, display column names, echo=FALSE}
 tbl <- matrix(c(1:36), ncol = 3, byrow= TRUE)
 rownames <- c("Identification", "Gender", "Age (in years)", "Driver's License Nbr", "Region Code", "Previously Insured", "Insured Vehicles Age", "Vehicle Damage",
@@ -199,7 +224,7 @@ try a k in the set of `r seq(3, 11, 2)`
 ```{r first set of training, echo=FALSE}
 k_hist <- list()
 control <- trainControl(method = "cv", number = 10, p = .9)
-train_knn1 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,11,2),18)), trControl = control)
+train_knn1 <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame(k = c(seq(3,11,2),20)), trControl = control)
 
 df_knn1 <- train_knn1$results     # extract results as a data frame
 k_hist <- list.append(k_hist, df_knn1)
@@ -225,6 +250,15 @@ max_k <- df_knn2$k[max_accuracy]
 
 df_knn <- merge(df_knn1, df_knn2, by=c("Accuracy","k", "Kappa", "AccuracySD", "KappaSD"), all=TRUE)
 ```
+```{r graghing value of k, echo=FALSE}
+all_k <- full_join(df_knn1, df_knn2)
+sorted_k <- all_k[order(all_k$k),]
+ggplot(sorted_k, aes(x=k, y=Accuracy))+ geom_line()
+max_k <- which.max(sorted_k$Accuracy)
+
+
+```
+
 From this second set of iterations, the maximum k value that we should use is `r max_k`. The final algorithm is calculated with this value.
 
 ```{r final train, echo=FALSE}
@@ -235,17 +269,12 @@ fit_knn <- knn3(train_set_x, train_set_y, k=max_k)
 ```
 We picked a value of `r max_k` for our calculations. Let's examine the derivation of this number
 
-```{r graghing value of k}
-all_k <- full_join(df_knn1, df_knn2)
-sorted_k <- all_k[order(all_k$k),]
-ggplot(sorted_k, aes(x=k, y=Accuracy))+ geom_line()
 
-```
 
 
 Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)? Here are the accuracy results for the k-NN model:
 
-```{r test_sets, echo=FALSE, include=FALSE)
+```{r test_sets, echo=FALSE, include=FALSE}
 
 accum_accuracy <- 0
 lapply(test_sets, knn_fcn)
@@ -319,25 +348,24 @@ print(paste("Ensemble accuracy: ", as.character(accum_accuracy / 10)))
 ```
 
 ### Other models (taking defaults)
-The end
+We've used two of the over 21,000 models that are available to determine from CRAN to determine a best fit for our data. Te first model that was investigated was glm or General Linear Model, which is a generalization of ordinary linear regression but accommodates distributions other than normal to include poisson, gaussian, binomial, multinominal, quasi, quasibinomial and gamma. Four of the families (binomial, gaussian, quasi and quasibinomial) produced the same accuracy result of 0.5928.
 
 
+```{r glm test cases, echo=FALSE, include = FALSE}
+glm_model(test_set, binomial())
+glm_model(test_set, gaussian())
+glm_model(test_set, quasi(link = "identity", variance ="constant"))
+glm_model(test_set, quasibinomial(link = "logit"))
+
+
+```
+
+Another model that was tried was the naive Bayes model which seeks the model the distribution of inputs but does not learn which features are most important. Again, using the standard train set, we find that the accuracy from the confusion matrix is 0.7121, which is still lower that was obtained from either the k-NN model or the random forest model.
+
+```{r naive_baues model testing}
+n_bayes(train_set)
+
+```
 ### Conclusion
-TBD
 
-'''
-
-train_set_x <- train_set %>% select(-Response)
-train_set_y <- as.factor(train_set$Response)
-
-fit_model <- kknn(train_set_x, train_set_y)
-
-y_hat_model <- predict(fit_model, train_set_x, type="class")
-cm <- confusionMatrix(y_hat_model, factor(test_set_y))
-print(paste("Accuracy: ", cm$overall["Accuracy"], 
-              "Sensitivity: ", cm$byClass["Sensitivity"],
-              "Specificity: ", cm$byClass["Specificity"]))
-
-
-
-'''
+That's all folks!
