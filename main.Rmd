@@ -769,11 +769,10 @@ glm_model(test_set, quasibinomial(link = "logit"))
 
 Another model that was tried was the naive Bayes model which seeks the model the distribution of inputs but does not learn which features are most important. Again, using the standard train set, we find that the accuracy from the confusion matrix is 0.7121, which is still lower that was obtained from either the k-NN model or the random forest model.
 
-```{r naive_baues model testing}
+```{r naive_bayes model testing}
 n_bayes(train_set)
 
 ```
 ### Conclusion
 
 That's all folks!
->>>>>>> b1014d9c10ce48d52dc522e94441a2285ab5d219
