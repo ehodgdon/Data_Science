@@ -15,10 +15,6 @@ knitr::opts_chunk$set(warning=FALSE)
 
 ### Introduction, setup, loading necessary libraries, and initialize variables  
 ```{r}
-NUMBER_OF_TEST_SETS = 10
-NUMBER_OF_TRAINING_ROWS = 50000
-NUMBER_OF_TEST_ROWS = 5000
-
 results <- data.frame()    # for the summary of results
 knn_results <- data.frame()
 rf_results <- data.frame()
@@ -95,7 +91,7 @@ knn_fcn <- function(test_set) {
   test_set_x <- test_set %>% select(-Response)
   y_hat <- predict(fit_knn, test_set_x, type = "class")
   cm <- confusionMatrix(y_hat, factor(test_set_y))
-  # print(paste("Accuracy: ", cm$overall["Accuracy"], 
+  # print(cat("Accuracy: ", cm$overall["Accuracy"], 
   #             "Sensitivity: ", cm$byClass["Sensitivity"],
   #             "Specificity: ", cm$byClass["Specificity"]))
   results <<- rbind(results, list("k-NN", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
@@ -248,7 +244,7 @@ This shows that our suspicion is not valid and we need to consider *Previously_i
 
 We now consider the *Response* column. What percentage of the reponses are positive, that is, how many cross-selling attempts were successful. We then ask the question if there are any vehicles that are not insured that have a positive response.
 
-```{r response mean, fig.align="center", echo=FALSE, fig.width = 5, fig.height= 2.5}
+```{r response mean, fig.align="center", echo=FALSE, error=FALSE, fig.width = 5, fig.height= 2.5}
 response_mean <- mean(train_data$Response)
 plot_df <- data.frame(c("negative", "positive"), c(1-response_mean, response_mean))
 colnames(plot_df) <- c("response","percent")
@@ -256,21 +252,20 @@ colnames(plot_df) <- c("response","percent")
 ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=response), show.legend=FALSE, stat="identity")    
 
 ```
-The graph shows that there is a definite component of positive response from customers that have not purchased insurance before.
+The graph shows that there is a definite component of positive responses from customers that have not purchased insurance before.
 
-The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will be developing this analysis on a small laptop and
-want to keep the the run time to be somewhat reasonable, so we will build subsets that will contain `r format_numbers(NUMBER_OF_TRAINING_ROWS, digits=6, format="dcml")` and `r NUMBER_OF_TEST_ROWS` records for the training and testing datasets respectively. There will be a total of `r NUMBER_OF_TEST_SETS` testing datasets sampled from the entire training set. When training and evaluating of the various models, the same datasets will be used.
+The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will be developing this analysis on a small laptop and want to keep the the run time to be somewhat reasonable, so we will build subsets that will contain `r format(params$number_of_training_rows, digits=7, nsmall=0)`, and `r params$number_of_test_rows` records for the training and testing datasets respectively. There will be a total of `r params$number_of_test_sets` testing datasets sampled from the entire training set. When training and evaluating of the various models, the same datasets will be used.
 
 
 
 ```{r build subset, echo=FALSE, error=FALSE}
 set.seed(2024)
-train_set <- sample_n(train_data, NUMBER_OF_TRAINING_ROWS)
+train_set <- sample_n(train_data, params$number_of_training_rows)
 train_set_x <- train_set %>% select(-Response)
 train_set_y <- as.factor(train_set$Response)
 test_sets <- list()
-for (i in 1:NUMBER_OF_TEST_SETS) {
-  test_set  <- sample_n(train_data, NUMBER_OF_TEST_ROWS)
+for (i in 1:params$number_of_test_sets) {
+  test_set  <- sample_n(train_data, params$number_of_test_rows)
   test_sets <- list.append(test_sets, test_set)
 }
 
@@ -334,7 +329,7 @@ accum_accuracy <- 0
 lapply(test_sets, knn_fcn)
 results[[nrow(results), 1]] <- paste(results[[nrow(results), 1]], "( k=", max_k, ")")
 
-# print(paste("k-NN accuracy: ", as.character(accum_accuracy / NUMBER_OF_TEST_SETS)))
+# print(paste("k-NN accuracy: ", as.character(accum_accuracy / params$number_of_test_sets)))
 ```
 ```{r display knn results, echo=FALSE}
 
@@ -345,7 +340,6 @@ knn_mean <- mean(knn_results$Accuracy)
 
 
 
-The accuracy average for these `r NUMBER_OF_TEST_SETS` tests is `r as.character(accum_accuracy / NUMBER_OF_TEST_SETS)` . 
 
 
 ```{r random forest, echo = FALSE, error = FALSE, include=FALSE}
@@ -367,7 +361,7 @@ cm$byClass["Specificity"]
 lapply(test_sets, rf_fcn)
 ```
 
-This algorithm ws based on the k-NN (nearest neighbor). Other models should be tested for comparisons. The first alternative to attempt is random forest, which is a compute-intensive model. There are several parameters that can be tuned to adjust the model and we will need to build a multitude of trees. As a result of this, we will only use a five-fold cross validation. The results of the  `r NUMBER_OF_TEST_SETS` test cases are as follows:
+This algorithm ws based on the k-NN (nearest neighbor). Other models should be tested for comparisons. The first alternative to attempt is random forest, which is a compute-intensive model. There are several parameters that can be tuned to adjust the model and we will need to build a multitude of trees. As a result of this, we will only use a five-fold cross validation. The results of the  `r params$number_of_test_sets` test cases are as follows:
 
 
 ```{r display rf results, echo=FALSE}
@@ -378,7 +372,7 @@ rf_mean <- mean(rf_results$Accuracy)
 ```
 
 
-The average of these 10 test cases is `r accum_accuracy`. We can see that the most important feature is whether the vehicle has been damaged followed closely by whether the customer has been previous insured.
+The average of these `r params$number_of_test_sets` test cases is `r accum_accuracy`. We can see that the most important feature is whether the vehicle has been damaged followed closely by whether the customer has been previous insured.
 ```{r graph importance, echo=FALSE, fig.align = "center"}
 importance <- fit_rf$importance
 colnames(importance) <- c("Mean")
@@ -404,7 +398,7 @@ lapply(test_sets, ensemble_fcn)
 ensemble_mean <- accum_accuracy / params$number_of_test_sets
 ```
 
-When we combine the two models that we have tried (knn and random forest) to determine if the combination is better than either one and run the `r NUMER_O`_TEST_SETS`test sets. However, the ensemble accuracy turns out to be `r as.character(ensemble_mean)` which is below the random forest accuracy of `r rf_mean'.
+When we combine the two models that we have tried (knn and random forest) to determine if the combination is better than either one and run the `r params$number_of_test_sets`test sets. However, the ensemble accuracy turns out to be `r as.character(ensemble_mean)` which is below the random forest accuracy of `r rf_mean'.
 
 
 ### Other models (taking defaults)
