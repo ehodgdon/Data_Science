@@ -3,20 +3,28 @@ title: "Insurance Cross Selling (Kaggle)"
 author: "Ellis Hodgdon"
 date: "2024-08-08"
 output: html_document
+params:
+  number_of_test_sets: 10
+  number_of_training_rows: 50000
+  number_of_test_rows: 5000
 ---
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning=FALSE)
 ```
 
-### Introduction, setup, loading necessary libraries, and adjust working directories   
+### Introduction, setup, loading necessary libraries, and initialize variables  
 ```{r}
 NUMBER_OF_TEST_SETS = 10
 NUMBER_OF_TRAINING_ROWS = 50000
 NUMBER_OF_TEST_ROWS = 5000
 
 results <- data.frame()    # for the summary of results
-
+knn_results <- data.frame()
+rf_results <- data.frame()
+glm_results <- data.frame()
+ensemble_results <- data.frame()
+bayes_results <- data.frame()
 
 ```
 
@@ -27,7 +35,7 @@ if (!require(rvest)) install.packages("rvest", verbose=FALSE)
 if (!require(dplyr)) instsall.packages("dplyr", verbose=FALSE)
 if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
 if (!require(caret)) install.packages("caret", verbose=FALSE)
-if (!require(caret)) install.packages("caret", verbose=FALSE)
+if (!require(formatdown)) install.packages("formatdown", verbose=FALSE)
 if (!require(rlist)) suppressMessages(install.packages("rlist", verbose=FALSE))
 if (!require(naivebayes)) install.packages("naivebayes", verbose=FALSE)
 if (!require(randomForest)) suppressMessages(install.packages("randomForest", verbose=FALSE))
@@ -91,6 +99,7 @@ knn_fcn <- function(test_set) {
   #             "Sensitivity: ", cm$byClass["Sensitivity"],
   #             "Specificity: ", cm$byClass["Specificity"]))
   results <<- rbind(results, list("k-NN", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+  knn_results <<- rbind(knn_results, list("k-NN", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
   accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
   return
 }
@@ -101,28 +110,12 @@ rf_fcn <- function(test_set) {
   test_set_x <- test_set %>% select(-Response)
   y_hat <- predict(fit_rf, test_set_x, type = "class")
   cm <- confusionMatrix(y_hat, factor(test_set_y))
-  print(paste("Accuracy: ", cm$overall["Accuracy"], 
-              "Sensitivity: ", cm$byClass["Sensitivity"],
-              "Specificity: ", cm$byClass["Specificity"]))
+  # print(paste("Accuracy: ", cm$overall["Accuracy"], 
+  #             "Sensitivity: ", cm$byClass["Sensitivity"],
+  #            "Specificity: ", cm$byClass["Specificity"]))
 results <<- rbind(results, list("rf", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+rf_results <<- rbind(rf_results, list("rf", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
 accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
-return 
-}
-
-
-
-glm_model <- function(dp, fam = gaussian()) {
-model <- glm(Response ~ Previously_Insured + Vehicle_Age + Vehicle_Damage + Vehicle_Age, 
-                family = fam, data = dp)
-summary(model)
-y_hat <- predict(model, dp %>% select(-Response), type="response")
-cutoff <- quantile(y_hat, 0.18)
-pred_glm <- ifelse(y_hat < 0.0006104226, "1", "0")
-pred_glm = as.factor(pred_glm)
-
-cm <- confusionMatrix(as.factor(dp$Response), pred_glm) 
-results <<- rbind(results, list("glm", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
-
 return 
 }
 
@@ -139,7 +132,26 @@ ensemble_fcn <- function(test_set) {
   cm <- confusionMatrix(y_pred, test_set_y)
   accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
   results <<- rbind(results, list('ensemble', cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
-  return
+  ensemble_results <<- rbind(ensemble_results, list('ensemble', cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+ return
+}
+
+
+
+glm_model <- function(dp, fam = gaussian()) {
+model <- glm(Response ~ Previously_Insured + Vehicle_Age + Vehicle_Damage + Vehicle_Age, 
+                family = fam, data = dp)
+summary(model)
+y_hat <- predict(model, dp %>% select(-Response), type="response")
+cutoff <- quantile(y_hat, 0.18)
+pred_glm <- ifelse(y_hat < 0.0006104226, "1", "0")
+pred_glm = as.factor(pred_glm)
+
+cm <- confusionMatrix(as.factor(dp$Response), pred_glm) 
+results <<- rbind(results, list("glm", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+glm_results <<- rbind(glm_results, list("glm", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+
+return 
 }
 
 
@@ -151,17 +163,32 @@ n_bayes <- function(dp) {
   y_hat <- predict(bayes, dp_x)
   cm <- confusionMatrix(y_hat, dp_y)
   results <<- rbind(results, list("naive Bayes",cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
-  return 
+  bayes_results <<- rbind(bayes_results, list("naive Bayes",cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+return 
 }
+
+#
+# Function to build accuracy table for display
+#
+disp_fcn <- function(rslts, title) {
+disp_df <- rslts %>%  select(-1)
+disp_df["MinMax"] <- ''
+colnames(disp_df) <- c("Accuracy", "Sensitivity", "Specificity", "MinMax")
+index <- which.min(disp_df$Accuracy)
+disp_df[index, "MinMax"] <- "Minimum"
+index <- which.max(disp_df$Accuracy)
+disp_df[index, "MinMax"] <- "Maximum"
+knitr::kable(disp_df, caption = title, digits = 4)
+}
+
 
 ```
 
 
 
 ### Problem Definition
-The goal of this analysis is to predict which customers respond positively to an automobile insurance offer.
+As a result of the acquisition of a smaller company by this company, management has decided to investigate cross-selling of their insurnce products and rewriting the business plan as necessary. To accomplish this, a data analysis is ordered to determine if cross-selling would be beneficial to the combined companies. The goal of this analysis is to predict which customers respond positively to an automobile insurance offer. A dataset has been developed that contains information about cross-selling in the insurance industry.
 
-The column *Result* as integer (0 or 1) indicates whether a resale was successful with this customer.
 
 
 ### Input the training dataset and data prep
@@ -190,6 +217,8 @@ tbl[,2] <- c("id", "Gender", "Age", "Driving_License", "Region_Code", "Previousl
 tbl[,3] <- col3
 knitr::kable(tbl, caption = "Column Names in Dataset", align="c")
 ```
+
+The column *Result* as integer (0 or 1) indicates whether a resale was successful with this customer.
 
 ### Data Preparation
 Data preparation and cleaning are done by a function so that it can be reused for different test and training data sets, if necessary.
@@ -230,7 +259,7 @@ ggplot(data=plot_df) + geom_bar(mapping = aes(x=response, y=percent, fill=respon
 The graph shows that there is a definite component of positive response from customers that have not purchased insurance before.
 
 The training dataset contains over 11 million rows while the test dataset contains over 7 million rows. We will be developing this analysis on a small laptop and
-want to keep the the run time to be somewhat reasonable, so we will build subsets that will contain `r NUMBER_OF_TRAINING_ROWS` and `r NUMBER_OF_TEST_ROWS` records for the training and testing datasets respectively. There will be a total of `r NUMBER_OF_TEST_SETS` testing datasets sampled from the entire training set. When training and evaluating of the various models, the same datasets will be used.
+want to keep the the run time to be somewhat reasonable, so we will build subsets that will contain `r format_numbers(NUMBER_OF_TRAINING_ROWS, digits=6, format="dcml")` and `r NUMBER_OF_TEST_ROWS` records for the training and testing datasets respectively. There will be a total of `r NUMBER_OF_TEST_SETS` testing datasets sampled from the entire training set. When training and evaluating of the various models, the same datasets will be used.
 
 
 
@@ -279,7 +308,7 @@ max_k <- df_knn2$k[max_accuracy]
 
 df_knn <- merge(df_knn1, df_knn2, by=c("Accuracy","k", "Kappa", "AccuracySD", "KappaSD"), all=TRUE)
 ```
-```{r graghing value of k, echo=FALSE, fig.align = "center", fig.height = 4, fig.width = 5}
+```{r graghing value of k, echo=FALSE, include=FALSE, fig.align = "center", fig.height = 4, fig.width = 5}
 all_k <- full_join(df_knn1, df_knn2)
 sorted_k <- all_k[order(all_k$k),]
 ggplot(sorted_k, aes(x=k, y=Accuracy))+ geom_line()
@@ -296,23 +325,28 @@ train_knn <- train(train_set_x, train_set_y, method="knn", tuneGrid = data.frame
 fit_knn <- knn3(train_set_x, train_set_y, k=max_k)
 
 ```
-The system picked a value of `r max_k` for our calculations. Let's examine the derivation of this number
+
+Now consider the test sets that we carved from the original data set. How do they match with the algorithm (function *predict*)? Here are the accuracy results for the k-NN model:
 
 
-
-
-Now consider the test set that we carved from the original data set. How does it match with the algorithm (function *predict*)? Here are the accuracy results for the k-NN model:
-
-```{r test_sets, echo=FALSE, include=FALSE}
-
+```{r test_sets, echo=FALSE, error=FALSE, include = FALSE}
 accum_accuracy <- 0
 lapply(test_sets, knn_fcn)
-print(paste("k-NN accuracy: ", as.character(accum_accuracy / NUMBER_OF_TEST_SETS)))
-# results[[nrow(results), 1]] <- paste(results[[nrow(results), 1]], "( k=", max_k, ")")
+results[[nrow(results), 1]] <- paste(results[[nrow(results), 1]], "( k=", max_k, ")")
+
+# print(paste("k-NN accuracy: ", as.character(accum_accuracy / NUMBER_OF_TEST_SETS)))
+```
+```{r display knn results, echo=FALSE}
+
+disp_fcn(knn_results, "Summary of k-NN testing")
+knn_mean <- mean(knn_results$Accuracy)
 
 ```
 
-This algorithm ws based on the k-NN (nearest neighbor). Other models should be tested for comparisons. The first alternative to attempt is random forest, which is a compute-intensive model. There are several parameters that can be tuned to adjust the model and we will need to built a multitude of trees. As a result of this, we will only use a five-fold cross validation.
+
+
+The accuracy average for these `r NUMBER_OF_TEST_SETS` tests is `r as.character(accum_accuracy / NUMBER_OF_TEST_SETS)` . 
+
 
 ```{r random forest, echo = FALSE, error = FALSE, include=FALSE}
 accum_accuracy <- 0
@@ -331,11 +365,20 @@ cm$byClass["Specificity"]
 
 
 lapply(test_sets, rf_fcn)
+```
+
+This algorithm ws based on the k-NN (nearest neighbor). Other models should be tested for comparisons. The first alternative to attempt is random forest, which is a compute-intensive model. There are several parameters that can be tuned to adjust the model and we will need to build a multitude of trees. As a result of this, we will only use a five-fold cross validation. The results of the  `r NUMBER_OF_TEST_SETS` test cases are as follows:
 
 
+```{r display rf results, echo=FALSE}
+
+disp_fcn(rf_results, "Summary of randomforest  testing")
+rf_mean <- mean(rf_results$Accuracy)
 
 ```
-The average of these 10 test cases is `r accum_accuracy`. We can see that the most important feature is whether the vehicle has been damaged followe closelyby whether the customer has been previous insured.
+
+
+The average of these 10 test cases is `r accum_accuracy`. We can see that the most important feature is whether the vehicle has been damaged followed closely by whether the customer has been previous insured.
 ```{r graph importance, echo=FALSE, fig.align = "center"}
 importance <- fit_rf$importance
 colnames(importance) <- c("Mean")
@@ -358,14 +401,13 @@ ggplot(data=sorted_importance, aes(x = reorder(xlabls, -sorted_importance), y=so
 ```{r ensemble, echo=FALSE, include=FALSE}
 accum_accuracy <- 0
 lapply(test_sets, ensemble_fcn)
-
-
+ensemble_mean <- accum_accuracy / params$number_of_test_sets
 ```
-When we combine the two models that we have tried (knn and random forest) to determine if the combination is better than either one. However, the ensemble accuracy turns out to be `r as.character(accum_accuracy / 10)` which is below the random forest accuracy of ?????
+
+When we combine the two models that we have tried (knn and random forest) to determine if the combination is better than either one and run the `r NUMER_O`_TEST_SETS`test sets. However, the ensemble accuracy turns out to be `r as.character(ensemble_mean)` which is below the random forest accuracy of `r rf_mean'.
 
 
 ### Other models (taking defaults)
-
 
 ```{r glm test cases, echo=FALSE, include = FALSE}
 glm_model(test_set, binomial)
@@ -384,23 +426,37 @@ results[[nrow(results),1]] <- paste(results[[nrow(results),1]],  "(quasibinomial
 We've used two of the over 21,000 models that are available to determine from CRAN to determine a best fit for our data. The first model that was investigated was *glm* or General Linear Model, which is a generalization of ordinary linear regression but accommodates distributions other than normal to include poisson, gaussian, binomial, multinominal, quasi, quasibinomial and gamma. Four of the families (binomial, gaussian, quasi and quasibinomial) produced the same accuracy result of `r results[[nrow(results),2]]`.
 
 
-Another model that was tried was the *naive Bayes* model which seeks the model the distribution of inputs but does not learn which features are most important. Again, using the standard train set, we find that the accuracy from the confusion matrix is 0.7121, which is still lower that was obtained from either the *k-NN* model or the *random forest* model.
-
 ```{r naive_bayes model testing, echo=FALSE, include=FALSE}
 n_bayes(train_set)
 
 ```
+Another model that was tried was the *naive Bayes* model which seeks the model the distribution of inputs but does not learn which features are most important. Again, using the standard train set, we find that the accuracy from the confusion matrix is `r bayes_results$Accuracy`, which is still lower that was obtained from either the *k-NN* model or the *random forest* model.
+
+
 ### Conclusion
+A sumary of the accuracy results for the models the were tested is:
 ```{r summary table, echo=FALSE}
 colnames(results) <- c("Model", "Accuracy", "Sensitivity", "Specificity")
 table_results <- results[order(-results$Accuracy),]
 table_results <- table_results %>% distinct(Model, .keep_all=TRUE)
 colnames(table_results) <- c("Model", "Accuracy", "Sensitivity", "Specificity")
 
-knitr::kable(table_results, caption = "Summary of Models", digits = 4)
+knitr::kable(table_results, digits = 4)
 ```
+Comparing the average for the different models, we determine that the random forest model gives the best accuracy.
 
 
 
 That's all folks!
+
+
+
+
+
+
+
+
+
+
+
 
