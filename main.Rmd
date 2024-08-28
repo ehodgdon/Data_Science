@@ -160,7 +160,7 @@ n_bayes <- function(dp) {
   cm <- confusionMatrix(y_hat, dp_y)
   results <<- rbind(results, list("naive Bayes",cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
   bayes_results <<- rbind(bayes_results, list("naive Bayes",cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
-return 
+  return 
 }
 
 #
@@ -366,13 +366,14 @@ This algorithm ws based on the k-NN (nearest neighbor). Other models should be t
 
 ```{r display rf results, echo=FALSE}
 
-disp_fcn(rf_results, "Summary of randomforest  testing")
+disp_fcn(rf_results, "Summary of random forest  testing")
 rf_mean <- mean(rf_results$Accuracy)
 
 ```
 
 
 The average of these `r params$number_of_test_sets` test cases is `r accum_accuracy`. We can see that the most important feature is whether the vehicle has been damaged followed closely by whether the customer has been previous insured.
+
 ```{r graph importance, echo=FALSE, fig.align = "center"}
 importance <- fit_rf$importance
 colnames(importance) <- c("Mean")
