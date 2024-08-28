@@ -151,6 +151,7 @@ return
 }
 
 
+
 n_bayes <- function(dp) {
   dp_y <- as.factor(dp$Response)
   dp_x <- dp %>% select(-Response)
@@ -162,6 +163,23 @@ n_bayes <- function(dp) {
   bayes_results <<- rbind(bayes_results, list("naive Bayes",cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
   return 
 }
+
+
+
+#
+# naive Bayes 
+#
+n_bayes_fcn <- function(test_set, fit) {
+  test_set_y <- as.factor(test_set$Response)
+  test_set_x <- test_set%>% select(-Response)
+  y_hat <- predict(fit, test_set_x)
+  cm <- confusionMatrix(y_hat, factor(test_set_y))
+  results <<- rbind(results, list("naiveBayes", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+  bayes_results <- rbind(bayes_results, list("naiveBayes", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+  accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
+  return
+}
+
 
 #
 # Function to build accuracy table for display
@@ -422,7 +440,13 @@ We've used two of the over 21,000 models that are available to determine from CR
 
 
 ```{r naive_bayes model testing, echo=FALSE, include=FALSE}
-n_bayes(train_set)
+# n_bayes(train_set)
+
+accum_accuracy <- 0
+control <- trainControl(method = "cv", number = 5)
+grid <- data.frame(mtry = c(1,2,3))
+train_nb <- train(as.factor(Response)~ Vehicle_Damage + Previously_Insured + Age + Vehicle_Age, method = "naive_bayes", data=test_set, usepoisson = TRUE)
+lapply(test_sets, n_bayes_fcn, train_nb)
 
 ```
 Another model that was tried was the *naive Bayes* model which seeks the model the distribution of inputs but does not learn which features are most important. Again, using the standard train set, we find that the accuracy from the confusion matrix is `r bayes_results$Accuracy`, which is still lower that was obtained from either the *k-NN* model or the *random forest* model.
