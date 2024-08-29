@@ -13,14 +13,15 @@ knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning=FALSE)
 ```
 
-### Introduction, setup, loading necessary libraries, and initialize variables  
 ```{r}
+columns <- c("Model", "Accuracy", "Sensitivity", "Specificity")
 results <- data.frame()    # for the summary of results
-knn_results <- data.frame()
-rf_results <- data.frame()
-glm_results <- data.frame()
-ensemble_results <- data.frame()
-bayes_results <- data.frame()
+knn_results <- data.frame(matrix(nrow = 0, ncol = length(columns)))
+rf_results <- data.frame(matrix(nrow = 0, ncol = length(columns)))
+glm_results <- data.frame(matrix(nrow = 0, ncol = length(columns)))
+ensemble_results <- data.frame(matrix(nrow = 0, ncol = length(columns)))
+bayes_results <- data.frame(matrix(nrow = 0, ncol = length(columns)))
+
 
 ```
 
@@ -31,7 +32,6 @@ if (!require(rvest)) install.packages("rvest", verbose=FALSE)
 if (!require(dplyr)) instsall.packages("dplyr", verbose=FALSE)
 if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
 if (!require(caret)) install.packages("caret", verbose=FALSE)
-if (!require(formatdown)) install.packages("formatdown", verbose=FALSE)
 if (!require(rlist)) suppressMessages(install.packages("rlist", verbose=FALSE))
 if (!require(naivebayes)) install.packages("naivebayes", verbose=FALSE)
 if (!require(randomForest)) suppressMessages(install.packages("randomForest", verbose=FALSE))
@@ -152,7 +152,7 @@ return
 
 
 
-n_bayes <- function(dp) {
+nnn_bayes <- function(dp) {
   dp_y <- as.factor(dp$Response)
   dp_x <- dp %>% select(-Response)
 
@@ -178,12 +178,13 @@ n_bayes_fcn <- function(test_set, fit) {
   cm <- confusionMatrix(y_hat, factor(test_set_y))
   results <<- rbind(results, list("naiveBayes", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
   bayes_results <<- rbind(bayes_results, list("naiveBayes", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
-  head(bayes_results)
   accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
   return
 }
 
+```
 
+```{r display function}
 #
 # Function to build accuracy table for display
 #
@@ -197,12 +198,11 @@ index <- which.max(disp_df$Accuracy)
 disp_df[index, "MinMax"] <- "Maximum"
 colnames(disp_df) <- c("Accuracy", "Sensitivity", "Specificity", "MinMax")
 
-model_accuracy <- mean(results$Accuracy)
-print(model_accuracy)
+model_accuracy <- mean(disp_df$Accuracy)
 disp_df <- rbind(disp_df, c("Average", model_accuracy, "", ""))
+colnames(disp_df) <- c("Accuracy", "Sensitivity", "Specificity", "MinMax")
 
-
-knitr::kable(disp_df, caption = title, digits = 4)
+knitr::kable(disp_df, caption = title, table.attr = "style='width:50%;'", digits = 4)
 }
 
 
@@ -265,7 +265,6 @@ This shows that Driving_License and Annual Premium are not going to be a good pr
 One might suspect that there would be no positive responses when there was no previous insurance applied. To determine if this is true we look at the number of positive responses when the column *Previously_Insured* is 0.
 ```{r previousl;y_insured}
 num <- sum(train_data$Previously_Insured == 0 & train_data$Response == TRUE)
-num
 ```
 This shows that our suspicion is not valid and we need to consider *Previously_insured* as a feature.
 
