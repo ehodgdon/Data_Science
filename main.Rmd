@@ -161,6 +161,7 @@ n_bayes <- function(dp) {
   cm <- confusionMatrix(y_hat, dp_y)
   results <<- rbind(results, list("naive Bayes",cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
   bayes_results <<- rbind(bayes_results, list("naive Bayes",cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+  head(bayes_results)
   return 
 }
 
@@ -170,12 +171,14 @@ n_bayes <- function(dp) {
 # naive Bayes 
 #
 n_bayes_fcn <- function(test_set, fit) {
+  print("Entering n_bayes_fcn")
   test_set_y <- as.factor(test_set$Response)
   test_set_x <- test_set%>% select(-Response)
   y_hat <- predict(fit, test_set_x)
   cm <- confusionMatrix(y_hat, factor(test_set_y))
   results <<- rbind(results, list("naiveBayes", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
-  bayes_results <- rbind(bayes_results, list("naiveBayes", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+  bayes_results <<- rbind(bayes_results, list("naiveBayes", cm$overall["Accuracy"], cm$byClass["Sensitivity"], cm$byClass["Specificity"]))
+  head(bayes_results)
   accum_accuracy <<- accum_accuracy + cm$overall["Accuracy"]
   return
 }
@@ -192,6 +195,13 @@ index <- which.min(disp_df$Accuracy)
 disp_df[index, "MinMax"] <- "Minimum"
 index <- which.max(disp_df$Accuracy)
 disp_df[index, "MinMax"] <- "Maximum"
+colnames(disp_df) <- c("Accuracy", "Sensitivity", "Specificity", "MinMax")
+
+model_accuracy <- mean(results$Accuracy)
+print(model_accuracy)
+disp_df <- rbind(disp_df, c("Average", model_accuracy, "", ""))
+
+
 knitr::kable(disp_df, caption = title, digits = 4)
 }
 
@@ -438,7 +448,6 @@ results[[nrow(results),1]] <- paste(results[[nrow(results),1]],  "(quasibinomial
 ```
 We've used two of the over 21,000 models that are available to determine from CRAN to determine a best fit for our data. The first model that was investigated was *glm* or General Linear Model, which is a generalization of ordinary linear regression but accommodates distributions other than normal to include poisson, gaussian, binomial, multinominal, quasi, quasibinomial and gamma. Four of the families (binomial, gaussian, quasi and quasibinomial) produced the same accuracy result of `r results[[nrow(results),2]]`.
 
-
 ```{r naive_bayes model testing, echo=FALSE, include=FALSE}
 # n_bayes(train_set)
 
@@ -448,6 +457,7 @@ grid <- data.frame(mtry = c(1,2,3))
 train_nb <- train(as.factor(Response)~ Vehicle_Damage + Previously_Insured + Age + Vehicle_Age, method = "naive_bayes", data=test_set, usepoisson = TRUE)
 lapply(test_sets, n_bayes_fcn, train_nb)
 
+disp_fcn(bayes_results, "Summary of naive Bayes mode")
 ```
 Another model that was tried was the *naive Bayes* model which seeks the model the distribution of inputs but does not learn which features are most important. Again, using the standard train set, we find that the accuracy from the confusion matrix is `r bayes_results$Accuracy`, which is still lower that was obtained from either the *k-NN* model or the *random forest* model.
 
