@@ -1,15 +1,19 @@
 params <-
 list(number_of_test_sets = 1L, testing_set_percentage = 10L, 
-    dataset_percentage = 10L)
+    dataset_percentage = 100L)
 
-## ----setup, include=FALSE--------------------------------------------------------------------------------------------------------------------------------------
+## ----setup, include=FALSE-------------------------------------------------------------------------------------------------------------------------------------
 start_time <- Sys.time()
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning=FALSE)
+#
+# URL of source
+# file1 <- "https://github.com/ehodgdon/Data_Science/raw/refs/heads/main/insurance-train.csv"
+# to read
+# dat <- read.csv(url(file1), header=TRUE)
 
 
-
-## ----initialization of global variables------------------------------------------------------------------------------------------------------------------------
+## ----initialization of global variables-----------------------------------------------------------------------------------------------------------------------
 # The '...results' variables need to be referenced as global variable if functions
 columns <- c("Model", "Accuracy", "Sensitivity", "Specificity")
 knn_results <- data.frame(matrix(nrow = 0, ncol = length(columns)))
@@ -35,7 +39,7 @@ vehicle_age_levels <- c("< 1 Year", "1-2 Year", "> 2 Years")
 
 
 
-## ----load libraries, echo=FALSE, include=FALSE-----------------------------------------------------------------------------------------------------------------
+## ----load libraries, echo=FALSE, include=FALSE----------------------------------------------------------------------------------------------------------------
 if (!require(tidyverse)) suppressMessages(install.packages(tidyverse, verbose=FALSE, quiet = TRUE))
 if (!require(rvest)) install.packages("rvest", verbose=FALSE)
 if (!require(tidyr)) install.packages("tidyr", verbose=FALSE)
@@ -49,7 +53,7 @@ if (!require(corrplot)) install.packages("corrplot", verbose=FALSE)
 if (!require(gridExtra)) install.packages(("gridExtra"))
 
 
-## ----function definitions, echo = FALSE, include=FALSE---------------------------------------------------------------------------------------------------------
+## ----function definitions, echo = FALSE, include=FALSE--------------------------------------------------------------------------------------------------------
 # -----------------------------------------------------------------------------
 # function definitions
 # -----------------------------------------------------------------------------
@@ -263,9 +267,11 @@ build_summary_table <- function() {
 # -----------------------------------------------------------------------------
 
 
+## ----read dataset and data prep, echo = FALSE-----------------------------------------------------------------------------------------------------------------
+url <- "https://github.com/ehodgdon/Data_Science/raw/refs/heads/main/insurance-train.csv"
+raw_data <- read.csv(url, header=TRUE)
 
-## ----read dataset and data prep, echo = FALSE------------------------------------------------------------------------------------------------------------------
-raw_data <- read.csv("insurance-train.csv")
+# raw_data <- read.csv("insurance-train.csv")
 original_size <- nrow(raw_data)
 original_cols <- colnames(raw_data)
 if (params$dataset_percentage < 100) {
@@ -289,7 +295,7 @@ tbl[,3] <- col3
 
 
 
-## ----data prep - build separate datasets, message=FALSE--------------------------------------------------------------------------------------------------------
+## ----data prep - build separate datasets, message=FALSE-------------------------------------------------------------------------------------------------------
 
 
 raw_data <- data_prep(raw_data)
@@ -315,18 +321,18 @@ training_set_y <- as.factor(training_set$Response)
 
 
 
-## ----display column names, echo=FALSE--------------------------------------------------------------------------------------------------------------------------
+## ----display column names, echo=FALSE-------------------------------------------------------------------------------------------------------------------------
 knitr::kable(tbl, caption = "Column Names in Dataset", align="c")
 
 
-## ----display nzv columns, fig.align='left'---------------------------------------------------------------------------------------------------------------------
+## ----display nzv columns, fig.align='left'--------------------------------------------------------------------------------------------------------------------
 df <- data.frame(cols = original_cols[train_nzv])
 knitr::kable(df, caption = "Columns Removed", col.names = NULL, align="l")
 
 
 
 
-## ----plot spearman matrix, fig.width= 4.5, fig.height = 5, out.width = ".7\\textwidth",  fig.align="center", wrapfigure = list("R", .7), results="asis"--------
+## ----plot spearman matrix, fig.width= 4.5, fig.height = 5, out.width = ".7\\textwidth",  fig.align="center", wrapfigure = list("R", .7), results="asis"-------
 cor_matrix <- training_set %>% mutate(Vehicle_Age = as.integer(Vehicle_Age)) %>% cor(method="spearman")
 corrplot <-  corrplot(cor_matrix,
              method="color",
@@ -342,12 +348,12 @@ corrplot <-  corrplot(cor_matrix,
              title="Spearman Correlation Map")
 
 
-## ----previously_insured, echo=TRUE-----------------------------------------------------------------------------------------------------------------------------
+## ----previously_insured, echo=TRUE----------------------------------------------------------------------------------------------------------------------------
 num <- sum(training_set$Previously_Insured == 0 & training_set$Response == TRUE)
 num
 
 
-## ----response mean, fig.align="center", echo=FALSE, error=FALSE, fig.width = 7, fig.height= 3.25---------------------------------------------------------------
+## ----response mean, fig.align="center", echo=FALSE, error=FALSE, fig.width = 7, fig.height= 3.25--------------------------------------------------------------
 response_mean <- mean(training_set$Response)
 plot_df <- data.frame(c("negative", "positive"), c(100 * (1-response_mean), 100 * response_mean))
 colnames(plot_df) <- c("response","percent")
@@ -371,7 +377,7 @@ response_plot_2 <-ggplot(data=plot1_df) +
 grid.arrange(response_plot_1, response_plot_2, ncol = 2, padding=10)
 
 
-## ----first set of training, error=TRUE, message = FALSE, include=FALSE-----------------------------------------------------------------------------------------
+## ----first set of training, error=TRUE, message = FALSE, include=FALSE----------------------------------------------------------------------------------------
 try({
 k_hist <- list()
 sub_set <- slice_sample(training_set, n = 100000, replace = FALSE) 
@@ -396,7 +402,7 @@ if (a < 1) a <- 1
 })
 
 
-## ----second set of training, echo = FALSE, include = FALSE-----------------------------------------------------------------------------------------------------
+## ----second set of training, echo = FALSE, include = FALSE----------------------------------------------------------------------------------------------------
 
 train_knn2 <- train(sub_set_x, as.factor(sub_set_y), method="knn", tuneGrid = data.frame(k = seq(a,b)), trControl = control)
 
@@ -407,11 +413,11 @@ max_k <- df_knn2$k[max_accuracy]
 df_knn <- merge(df_knn1, df_knn2, by=c("Accuracy","k", "Kappa", "AccuracySD", "KappaSD"), all=TRUE)
 
 
-## ----graghing value of k, echo=FALSE, include=FALSE, fig.align = "center", fig.height = 4, fig.width = 5-------------------------------------------------------
+## ----graghing value of k, echo=FALSE, include=FALSE, fig.align = "center", fig.height = 4, fig.width = 5------------------------------------------------------
 # The first two training sessions are to determine a good value of k and are done with a reduced dataset size and the number of folds set to 5
 all_k <- full_join(df_knn1, df_knn2)
 
-## ----display k graph, fig.width = 6, fig.height=3--------------------------------------------------------------------------------------------------------------
+## ----display k graph, fig.width = 6, fig.height=3-------------------------------------------------------------------------------------------------------------
 sorted_k <- all_k[order(all_k$k),]
 ggplot(sorted_k, aes(x=k, y=Accuracy))+ geom_line()
 max_k <- which.max(sorted_k$Accuracy)
@@ -419,7 +425,7 @@ max_k <- which.max(sorted_k$Accuracy)
 
 
 
-## ----final train - takes a while, echo=FALSE-------------------------------------------------------------------------------------------------------------------
+## ----final train - takes a while, echo=FALSE------------------------------------------------------------------------------------------------------------------
 control <- trainControl(method = "cv", number = 10, p = .9)
 train_knn <- train(training_set_x, training_set_y, method="knn", tuneGrid = data.frame(k = max_k), trControl = control)
 
@@ -427,20 +433,20 @@ fit_knn <- knn3(training_set_x, training_set_y, k=max_k)
 
 
 
-## ----test_sets, echo=FALSE, error=FALSE, include = FALSE-------------------------------------------------------------------------------------------------------
+## ----test_sets, echo=FALSE, error=FALSE, include = FALSE------------------------------------------------------------------------------------------------------
 lapply(test_sets, knn_fcn)
 
 
 
 
-## ----display knn results, echo=FALSE---------------------------------------------------------------------------------------------------------------------------
+## ----display knn results, echo=FALSE--------------------------------------------------------------------------------------------------------------------------
 
 disp_fcn(knn_results, "Summary of k-NN testing")
 knn_mean <- mean(knn_results$Accuracy)
 
 
 
-## ----random forest - takes a while also, echo = FALSE, error = FALSE, include=FALSE----------------------------------------------------------------------------
+## ----random forest - takes a while also, echo = FALSE, error = FALSE, include=FALSE---------------------------------------------------------------------------
 
 control <- trainControl(method = "cv", number = 5)
 grid <- data.frame(mtry = c(1,2,3))
@@ -457,13 +463,13 @@ cm <- confusionMatrix(y_hat_rf, factor(training_set_y))
 lapply(test_sets, rf_fcn)
 
 
-## ----display rf resultsa,echo = FALSE--------------------------------------------------------------------------------------------------------------------------
+## ----display rf resultsa,echo = FALSE-------------------------------------------------------------------------------------------------------------------------
 disp_fcn(rf_results, "Summary of random forest  testing")
 rf_mean <- mean(rf_results$Accuracy)
 
 
 
-## ----graph importance, echo=FALSE, fig.align = "center"--------------------------------------------------------------------------------------------------------
+## ----graph importance, echo=FALSE, fig.align = "center"-------------------------------------------------------------------------------------------------------
 importance <- fit_rf$importance
 colnames(importance) <- c("Mean")
 sorted_importance <- as.data.frame(importance[order(importance[,"Mean"]),]) * 100/ sum(importance)
@@ -482,27 +488,27 @@ ggplot(data=sorted_importance, aes(x = reorder(xlabls, -sorted_importance), y=so
 
 
 
-## ----ensemble, echo=FALSE, include=FALSE-----------------------------------------------------------------------------------------------------------------------
+## ----ensemble, echo=FALSE, include=FALSE----------------------------------------------------------------------------------------------------------------------
 lapply(test_sets, ensemble_fcn)
 ensemble_mean <- mean(ensemble_results$Accuracy)
 
 
-## ----display ensemble results, echo=FALSE----------------------------------------------------------------------------------------------------------------------
+## ----display ensemble results, echo=FALSE---------------------------------------------------------------------------------------------------------------------
 disp_fcn(ensemble_results, "Summary of ensemble testing")
 
 
-## ----naive_bayes model testing, echo = FALSE, include = FALSE--------------------------------------------------------------------------------------------------
+## ----naive_bayes model testing, echo = FALSE, include = FALSE-------------------------------------------------------------------------------------------------
 control <- trainControl(method = "cv", number = 5)
 grid <- data.frame(mtry = c(1,2,3))
 train_nb <- train(as.factor(Response)~ Vehicle_Damage + Previously_Insured + Age + Vehicle_Age, method = "naive_bayes", data=training_set, usepoisson = TRUE)
 lapply(test_sets, n_bayes_fcn, train_nb)
 
 
-## ----display bayes results, echo = FALSE-----------------------------------------------------------------------------------------------------------------------
+## ----display bayes results, echo = FALSE----------------------------------------------------------------------------------------------------------------------
 disp_fcn(bayes_results, "Summary of naive Bayes mode")
 
 
-## ----glm test cases, echo = FALSE------------------------------------------------------------------------------------------------------------------------------
+## ----glm test cases, echo = FALSE-----------------------------------------------------------------------------------------------------------------------------
 glm_model(training_set, binomial(link=logit))
 glm_results[[nrow(glm_results),1]] <- paste(glm_results[[nrow(glm_results),1]],  "(binomial)")
 
@@ -518,26 +524,26 @@ disp_fcn_glm(glm_results, "Summary of several glm families model")
 
 
 
-## ----creat summary table, echo=FALSE, include = FALSE----------------------------------------------------------------------------------------------------------
+## ----creat summary table, echo=FALSE, include = FALSE---------------------------------------------------------------------------------------------------------
 
 summary_table <- build_summary_table()
 
 
-## ----display summary list, echo = FALSE------------------------------------------------------------------------------------------------------------------------
+## ----display summary list, echo = FALSE-----------------------------------------------------------------------------------------------------------------------
 knitr::kable(summary_table,  row.names = FALSE, digits = 4)
 
 
-## ----find best model-------------------------------------------------------------------------------------------------------------------------------------------
+## ----find best model------------------------------------------------------------------------------------------------------------------------------------------
 
 
 
-## ----show parameters, echo=FALSE-------------------------------------------------------------------------------------------------------------------------------
+## ----show parameters, echo=FALSE------------------------------------------------------------------------------------------------------------------------------
 show_parameters() %>% 
   kbl(longtable = TRUE) %>%
   kable_styling(full_width = FALSE, position="left", latex_options = "hold_position")
 
 
-## ----stop time, echo=FALSE-------------------------------------------------------------------------------------------------------------------------------------
+## ----stop time, echo=FALSE------------------------------------------------------------------------------------------------------------------------------------
 print(paste('Elapsed time for this analysis:', format(as.numeric(difftime(Sys.time(), start_time, units="mins")), digits=5), "mins"))
 print(paste('Finished at:', format(Sys.time(), "%R %p")))
 
