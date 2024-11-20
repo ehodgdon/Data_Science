@@ -9,7 +9,7 @@ output:
 params:
   number_of_test_sets: 1
   testing_set_percentage: 10
-  dataset_percentage: 10
+  dataset_percentage: 100
 
 ---
 
@@ -17,7 +17,11 @@ params:
 start_time <- Sys.time()
 knitr::opts_chunk$set(echo = FALSE)
 knitr::opts_chunk$set(warning=FALSE)
-
+#
+# URL of source
+# file1 <- "https://github.com/ehodgdon/Data_Science/raw/refs/heads/main/insurance-train.csv"
+# to read
+# dat <- read.csv(url(file1), header=TRUE)
 ```
 
 ```{r initialization of global variables}
@@ -272,10 +276,13 @@ build_summary_table <- function() {
 # -----------------------------------------------------------------------------
 # end of functions
 # -----------------------------------------------------------------------------
-
+```
 
 ```{r read dataset and data prep, echo = FALSE}
-raw_data <- read.csv("insurance-train.csv")
+url <- "https://github.com/ehodgdon/Data_Science/raw/refs/heads/main/insurance-train.csv"
+raw_data <- read.csv(url, header=TRUE)
+
+# raw_data <- read.csv("insurance-train.csv")
 original_size <- nrow(raw_data)
 original_cols <- colnames(raw_data)
 if (params$dataset_percentage < 100) {
@@ -655,8 +662,9 @@ This analysis should be completed periodically to ensure accurate results.
 ## Appendix
 
 #### System Information
-RStudio: version 2024.09.0 Build 379  
-R: Version 4.3.2 (2023-10-21 ucrt) -- "Eye Noise"  
+RStudio: version '2024.09.0 Build 379  'r rstudioapi::versionInfo()$long_version rstudioapi::versionInfo()$release_name`
+'r version$version.string -- version$nickname`  
+Operating system: `r Sys.info()['release'] Sys.info()['version'] Sys.info('machine') `
 Windows 11 Pro Version 22H2 Build 22621.4317 64 bit operating system 64 bit processor  
 Dell 5431 Processor 2.20 GHz Memory 32 GB  
 
